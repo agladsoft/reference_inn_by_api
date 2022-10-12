@@ -97,7 +97,7 @@ class GetINNApi:
         rows = list(rows)
         if rows and rows[0][1] != "empty":
             print(f"Данные есть в кэше: Полное наименование - {rows[0][0]}, ИНН - {rows[0][1]}")
-            return rows[0][0], rows[0][1]
+            return rows[0][1], rows[0][0]
         for key in [value]:
             api_inn = self.get_inn_by_yandex(key)
             with contextlib.suppress(Exception):
