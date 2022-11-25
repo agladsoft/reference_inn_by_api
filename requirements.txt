@@ -1,0 +1,7 @@
+csvkit==1.0.7
+pandas==1.4.3
+requests-html==0.10.0
+python-stdnum==1.17
+deep-translator==1.9.0
+fuzzywuzzy==0.18.0
+python-Levenshtein==0.20.8
