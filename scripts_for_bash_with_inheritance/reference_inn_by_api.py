@@ -1,64 +1,45 @@
-import contextlib
-import json
-import logging
-import os
 import re
-import sqlite3
 import sys
-from pathlib import Path
+import json
+import sqlite3
+import contextlib
 import numpy as np
 import pandas as pd
-from cache_inn import GetINNApi
 import validate_inn
-from deep_translator import GoogleTranslator
+from __init__ import *
+from pathlib import Path
 from fuzzywuzzy import fuzz
+from cache_inn import GetINNApi
 from multiprocessing import Pool
-
-worker_count = 8
-
-if not os.path.exists(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging"):
-    os.mkdir(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging")
-
-json_handler = logging.FileHandler(filename=f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging/{os.path.basename(__file__)}.log")
-logger = logging.getLogger("file_handler")
-if logger.hasHandlers():
-    logger.handlers.clear()
-logger.addHandler(json_handler)
-logger.setLevel(logging.INFO)
-
-console_out = logging.StreamHandler()
-logger_stream = logging.getLogger("stream")
-if logger_stream.hasHandlers():
-    logger_stream.handlers.clear()
-logger_stream.addHandler(console_out)
-logger_stream.setLevel(logging.INFO)
-
-input_file_path = os.path.abspath(sys.argv[1])
-output_folder = sys.argv[2]
+from deep_translator import GoogleTranslator
 
 
-df = pd.read_csv(input_file_path)
-df.columns = ['company_name']
-df = df.drop_duplicates(subset='company_name', keep="first")
-df = df.replace({np.nan: None})
-df['company_name_rus'] = None
-df['company_inn'] = None
-df['company_name_unified'] = None
-df['is_inn_found_auto'] = None
-df['confidence_rate'] = None
-parsed_data = df.to_dict('records')
+def lemmatize_str(company_name_rus):
+    docs = nlp(company_name_rus)
+    company_name_rus = " ".join([token.lemma_ for token in docs])
+    docs = list(nlp.pipe(company_name_rus))
+    list_letters = []
+    for doc in docs:
+        for w in doc:
+            if w.like_num or w.lemma_ == '+':
+                list_letters.append(" ")
+            elif not w.is_punct:
+                list_letters.append(w.lower_)
+    company_name_rus = "".join(list_letters)
+    return re.sub(" +", " ", company_name_rus)
 
 
 def add_values_in_dict(provider, dict_data, inn=None, value=None, company_name_rus=None):
+    company_name_rus = lemmatize_str(company_name_rus)
     translated = GoogleTranslator(source='en', target='ru').translate(company_name_rus)
     if value:
         api_inn, api_name_inn = provider.get_inn_from_value(translated)
         return api_inn, api_name_inn, translated
     inn, api_name_inn = provider.get_inn(inn)
-    translated = re.sub(" +", " ", translated)
+    # translated = re.sub(" +", " ", translated)
     api_name_inn = re.sub(" +", " ", api_name_inn)
-    translated = translated.translate({ord(c): " " for c in ",'!@#$%^&*()[]{};<>?\|`~-=_+"})
-    api_name_inn = api_name_inn.translate({ord(c): "" for c in ",'!@#$%^&*()[]{};<>?\|`~-=_+"})
+    # translated = translated.translate({ord(c): " " for c in ",'!@#$%^&*()[]{};<>?\|`~-=_+"})
+    # api_name_inn = api_name_inn.translate({ord(c): "" for c in ",'!@#$%^&*()[]{};<>?\|`~-=_+"})
     dict_data['company_name_rus'] = translated
     dict_data["company_inn"] = inn
     dict_data["company_name_unified"] = api_name_inn
@@ -95,6 +76,19 @@ def parse_data(i, dict_data):
     with open(f"{output_file_path}", 'w', encoding='utf-8') as f:
         json.dump(dict_data, f, ensure_ascii=False, indent=4)
 
+input_file_path = os.path.abspath(sys.argv[1])
+output_folder = sys.argv[2]
+
+df = pd.read_csv(input_file_path)
+df.columns = ['company_name']
+df = df.drop_duplicates(subset='company_name', keep="first")
+df = df.replace({np.nan: None})
+df['company_name_rus'] = None
+df['company_inn'] = None
+df['company_name_unified'] = None
+df['is_inn_found_auto'] = None
+df['confidence_rate'] = None
+parsed_data = df.to_dict('records')
 
 procs = []
 path = f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/cache_inn/cache_inn.db"
@@ -109,7 +103,6 @@ with Pool(processes=worker_count) as pool:
         procs.append(proc)
 
     results = [proc.get() for proc in procs]
-
 conn.close()
 
 

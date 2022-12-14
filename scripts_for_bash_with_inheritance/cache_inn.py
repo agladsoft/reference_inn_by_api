@@ -14,7 +14,8 @@ class GetINNApi:
         self.conn = conn
         self.cur = self.load_cache()
 
-    def get_inn_by_api(self, value, id, var_api_name=None):
+    @staticmethod
+    def get_inn_by_api(value, id, var_api_name=None):
         try:
             session = HTMLSession()
             api_inn = session.get(f'https://www.rusprofile.ru/search?query={value}')
