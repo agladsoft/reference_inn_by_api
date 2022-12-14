@@ -1,7 +1,7 @@
 import os
 import spacy
 import logging
-os.environ['XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS'] = "/home/timurzav/PycharmWork/docker_project/reference_inn_by_api"
+
 if not os.path.exists(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging"):
     os.mkdir(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging")
 
