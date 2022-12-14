@@ -32,18 +32,15 @@ def lemmatize_str(company_name_rus):
 def add_values_in_dict(provider, dict_data, inn=None, value=None, company_name_rus=None):
     company_name_rus = lemmatize_str(company_name_rus)
     translated = GoogleTranslator(source='en', target='ru').translate(company_name_rus)
+    dict_data['company_name_rus'] = translated
+    dict_data['is_inn_found_auto'] = True
     if value:
         api_inn, api_name_inn = provider.get_inn_from_value(translated)
         return api_inn, api_name_inn, translated
     inn, api_name_inn = provider.get_inn(inn)
-    # translated = re.sub(" +", " ", translated)
     api_name_inn = re.sub(" +", " ", api_name_inn)
-    # translated = translated.translate({ord(c): " " for c in ",'!@#$%^&*()[]{};<>?\|`~-=_+"})
-    # api_name_inn = api_name_inn.translate({ord(c): "" for c in ",'!@#$%^&*()[]{};<>?\|`~-=_+"})
-    dict_data['company_name_rus'] = translated
     dict_data["company_inn"] = inn
     dict_data["company_name_unified"] = api_name_inn
-    dict_data['is_inn_found_auto'] = True
     dict_data['confidence_rate'] = fuzz.partial_ratio(api_name_inn.upper(), translated.upper())
 
 
