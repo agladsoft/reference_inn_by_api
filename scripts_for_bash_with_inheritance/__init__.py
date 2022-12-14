@@ -19,7 +19,7 @@ if logger_stream.hasHandlers():
 logger_stream.addHandler(console_out)
 logger_stream.setLevel(logging.INFO)
 
-worker_count = 1
+worker_count = 8
 
 
 nlp = spacy.load('en_core_web_sm')
