@@ -111,7 +111,7 @@ class GetINNApi:
         return api_inn, value
 
     def cache_add_and_save(self, api_inn, api_name):
-        self.cur.executemany(f"INSERT INTO {self.table_name} VALUES(?, ?)", [(api_inn, api_name)])
+        self.cur.executemany(f"INSERT or IGNORE INTO {self.table_name} VALUES(?, ?)", [(api_inn, api_name)])
         self.conn.commit()
         return "Данные записываются в кэш", api_inn, api_name
 
