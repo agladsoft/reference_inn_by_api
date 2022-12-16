@@ -22,7 +22,6 @@ find "${xls_path}" -maxdepth 1 -type f \( -name "*.xls*" -or -name "*.XLS*" \) !
 do
   if [[ "${file}" == *"error_"* ]];
   then
-    echo "Contains an error in ${file}"
     continue
   fi
 
