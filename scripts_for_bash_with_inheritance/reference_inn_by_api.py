@@ -100,7 +100,6 @@ with Pool(processes=worker_count) as pool:
     for i, dict_data in enumerate(parsed_data, 2):
         proc = pool.apply_async(parse_data, (i, dict_data))
         procs.append(proc)
-
     results = [proc.get() for proc in procs]
 conn.close()
 
