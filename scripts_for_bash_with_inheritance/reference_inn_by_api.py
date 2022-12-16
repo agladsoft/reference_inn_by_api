@@ -38,8 +38,6 @@ def add_values_in_dict(provider, dict_data, inn=None, value=None, company_name_r
         dict_data['company_name_lemma'] = company_name_lemma
         api_inn, api_name_inn = provider.get_inn_from_value(translated)
         return api_inn, api_name_inn, translated
-    else:
-        dict_data['company_name_lemma'] = company_name_lemma
     inn, api_name_inn = provider.get_inn(inn)
     api_name_inn = re.sub(" +", " ", api_name_inn)
     dict_data["company_inn"] = inn
@@ -56,6 +54,7 @@ def get_inn_from_str(value, dict_data):
             item_inn2 = validate_inn.validate(item_inn)
             list_inn.append(item_inn2)
     if list_inn:
+        dict_data['company_name_lemma'] = lemmatize_str(value)
         add_values_in_dict(cache_inn, dict_data, inn=list_inn[0], company_name_rus=value)
     else:
         cache_name_inn = GetINNApi("company_name_and_inn", conn)
