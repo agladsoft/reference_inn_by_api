@@ -30,9 +30,10 @@ def lemmatize_str(company_name_rus):
 
 
 def add_values_in_dict(provider, dict_data, inn=None, value=None, company_name_rus=None):
-    company_name_rus = lemmatize_str(company_name_rus)
-    translated = GoogleTranslator(source='en', target='ru').translate(company_name_rus)
+    company_name_lemma = lemmatize_str(company_name_rus)
+    translated = GoogleTranslator(source='en', target='ru').translate(company_name_lemma)
     dict_data['company_name_rus'] = translated
+    dict_data['company_name_lemma'] = company_name_lemma
     dict_data['is_inn_found_auto'] = True
     if value:
         api_inn, api_name_inn = provider.get_inn_from_value(translated)
