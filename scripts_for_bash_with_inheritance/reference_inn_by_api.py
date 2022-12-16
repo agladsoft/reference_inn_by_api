@@ -38,6 +38,8 @@ def add_values_in_dict(provider, dict_data, inn=None, value=None, company_name_r
         dict_data['company_name_lemma'] = company_name_lemma
         api_inn, api_name_inn = provider.get_inn_from_value(translated)
         return api_inn, api_name_inn, translated
+    else:
+        dict_data['company_name_lemma'] = company_name_lemma
     inn, api_name_inn = provider.get_inn(inn)
     api_name_inn = re.sub(" +", " ", api_name_inn)
     dict_data["company_inn"] = inn
