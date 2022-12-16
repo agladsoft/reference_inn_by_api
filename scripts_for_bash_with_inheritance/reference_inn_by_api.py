@@ -64,9 +64,12 @@ def get_inn_from_str(value, dict_data):
 
 def parse_data(i, dict_data):
     for key, value in dict_data.items():
-        with contextlib.suppress(Exception):
+        try:
             if key == 'company_name':
                 get_inn_from_str(value, dict_data)
+        except Exception as ex:
+            logger.info(f'Error in inn {ex}: {i} data is {dict_data}')
+            logger_stream.info(f'Error in inn {ex}: {i} data is {dict_data}')
 
     logger.info(f'{i} data is {dict_data}')
     logger_stream.info(f'{i} data is {dict_data}')

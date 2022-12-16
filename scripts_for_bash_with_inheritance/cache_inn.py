@@ -4,6 +4,7 @@ from requests_html import HTMLSession
 from bs4 import BeautifulSoup
 import validate_inn
 import contextlib
+from __init__ import logger, logger_stream
 import re
 import logging
 
@@ -62,6 +63,8 @@ class GetINNApi:
             try:
                 self.get_inn_from_html(myroot, index_page, results, list_inn, count_inn)
             except Exception as ex:
+                logger.info(f'Error {ex}: not found an inn in Yandex')
+                logger_stream.info(f'Error {ex}: not found an inn in Yandex')
                 continue
         return max(list_inn, key=list_inn.get) if list_inn else "empty"
 
