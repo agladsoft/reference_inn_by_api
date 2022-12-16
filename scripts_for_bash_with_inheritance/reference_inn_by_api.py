@@ -30,12 +30,12 @@ def lemmatize_str(company_name_rus):
 
 
 def add_values_in_dict(provider, dict_data, inn=None, value=None, company_name_rus=None):
-    company_name_lemma = lemmatize_str(company_name_rus)
-    translated = GoogleTranslator(source='en', target='ru').translate(company_name_lemma)
+    # company_name_lemma = lemmatize_str(company_name_rus)
+    translated = GoogleTranslator(source='en', target='ru').translate(company_name_rus)
     dict_data['company_name_rus'] = translated
     dict_data['is_inn_found_auto'] = True
     if value:
-        dict_data['company_name_lemma'] = company_name_lemma
+        # dict_data['company_name_lemma'] = company_name_lemma
         api_inn, api_name_inn = provider.get_inn_from_value(translated)
         return api_inn, api_name_inn, translated
     inn, api_name_inn = provider.get_inn(inn)
@@ -54,7 +54,7 @@ def get_inn_from_str(value, dict_data):
             item_inn2 = validate_inn.validate(item_inn)
             list_inn.append(item_inn2)
     if list_inn:
-        dict_data['company_name_lemma'] = lemmatize_str(value)
+        # dict_data['company_name_lemma'] = lemmatize_str(value)
         add_values_in_dict(cache_inn, dict_data, inn=list_inn[0], company_name_rus=value)
     else:
         cache_name_inn = GetINNApi("company_name_and_inn", conn)
