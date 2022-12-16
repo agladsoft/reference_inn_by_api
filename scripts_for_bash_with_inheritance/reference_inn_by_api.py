@@ -73,6 +73,7 @@ def parse_data(i, dict_data):
     with open(f"{output_file_path}", 'w', encoding='utf-8') as f:
         json.dump(dict_data, f, ensure_ascii=False, indent=4)
 
+
 input_file_path = os.path.abspath(sys.argv[1])
 output_folder = sys.argv[2]
 
