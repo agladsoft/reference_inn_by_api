@@ -83,6 +83,7 @@ df.columns = ['company_name']
 df = df.drop_duplicates(subset='company_name', keep="first")
 df = df.replace({np.nan: None})
 df['company_name_rus'] = None
+df['company_name_lemma'] = None
 df['company_inn'] = None
 df['company_name_unified'] = None
 df['is_inn_found_auto'] = None
