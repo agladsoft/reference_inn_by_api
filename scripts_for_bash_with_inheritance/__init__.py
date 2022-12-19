@@ -1,7 +1,9 @@
 import os
+import json
 import spacy
 import logging
-
+import requests
+os.environ['XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS'] = "/home/timurzav/PycharmWork/docker_project/reference_inn_by_api"
 if not os.path.exists(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging"):
     os.mkdir(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging")
 
@@ -22,5 +24,22 @@ logger_stream.setLevel(logging.INFO)
 
 worker_count = 6
 
-
 nlp = spacy.load('en_core_web_sm')
+
+body = {
+    "targetLanguageCode": "ru",
+    "folderId": "b1gqnc8iu6nronrd6639",
+}
+
+header = {
+    "Content-Type": "application/json",
+    "Authorization": "Api-Key AQVN1WLLSufpkWuqCkYaT92hB3YuLcSKDooMbBcL"
+}
+
+replaced_words = ["ООО", "OOO", "OОO", "ОOО", "OOО", "ООO", "ИП", "ЗАО", "3АО", "АО"]
+
+
+def get_translate_from_yandex(text):
+    body["texts"] = text
+    response = requests.post('https://translate.api.cloud.yandex.net/translate/v2/translate', json=body, headers=header)
+    return json.loads(response.text)["translations"][0]["text"]

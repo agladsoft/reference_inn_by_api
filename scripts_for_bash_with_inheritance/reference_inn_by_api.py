@@ -1,6 +1,5 @@
 import re
 import sys
-import json
 import sqlite3
 import contextlib
 import numpy as np
@@ -30,19 +29,38 @@ def lemmatize_str(company_name_rus):
 
 
 def add_values_in_dict(provider, dict_data, inn=None, value=None, company_name_rus=None):
-    # company_name_lemma = lemmatize_str(company_name_rus)
-    translated = GoogleTranslator(source='en', target='ru').translate(company_name_rus)
+    translated = get_translate_from_yandex(company_name_rus)
+    translated = re.sub(" +", " ", translated)
     dict_data['company_name_rus'] = translated
     dict_data['is_inn_found_auto'] = True
     if value:
-        # dict_data['company_name_lemma'] = company_name_lemma
         api_inn, api_name_inn = provider.get_inn_from_value(translated)
         return api_inn, api_name_inn, translated
     inn, api_name_inn = provider.get_inn(inn)
     api_name_inn = re.sub(" +", " ", api_name_inn)
     dict_data["company_inn"] = inn
     dict_data["company_name_unified"] = api_name_inn
-    dict_data['confidence_rate'] = fuzz.partial_ratio(api_name_inn.upper(), translated.upper())
+    api_name_inn = replace_forms_organizations(api_name_inn)
+    fuzz_company_name = fuzz.partial_ratio(api_name_inn.upper(), translated.upper())
+    # if fuzz_company_name < 50:
+    fuzz_company_name = compare_different_fuzz(api_name_inn, translated, fuzz_company_name, dict_data)
+    dict_data['confidence_rate'] = fuzz_company_name
+
+
+def replace_forms_organizations(api_name_inn):
+    for elem in replaced_words:
+        api_name_inn = api_name_inn.replace(elem, "")
+    api_name_inn = api_name_inn.translate({ord(c): "" for c in '"'}).strip()
+    return api_name_inn
+
+
+def compare_different_fuzz(api_name_inn, translated, fuzz_company_name, dict_data):
+    api_name_inn_en = GoogleTranslator(source='ru', target='en').translate(api_name_inn)
+    api_name_inn_en = replace_forms_organizations(api_name_inn_en)
+    dict_data["company_name_unified_en"] = api_name_inn_en
+    fuzz_company_name_two = fuzz.partial_ratio(api_name_inn_en.upper(), translated.upper())
+    fuzz_company_name = max(fuzz_company_name, fuzz_company_name_two)
+    return fuzz_company_name
 
 
 def get_inn_from_str(value, dict_data):
@@ -54,7 +72,6 @@ def get_inn_from_str(value, dict_data):
             item_inn2 = validate_inn.validate(item_inn)
             list_inn.append(item_inn2)
     if list_inn:
-        # dict_data['company_name_lemma'] = lemmatize_str(value)
         add_values_in_dict(cache_inn, dict_data, inn=list_inn[0], company_name_rus=value)
     else:
         cache_name_inn = GetINNApi("company_name_and_inn", conn)
@@ -87,7 +104,7 @@ df.columns = ['company_name']
 df = df.drop_duplicates(subset='company_name', keep="first")
 df = df.replace({np.nan: None})
 df['company_name_rus'] = None
-df['company_name_lemma'] = None
+df['company_name_unified_en'] = None
 df['company_inn'] = None
 df['company_name_unified'] = None
 df['is_inn_found_auto'] = None
