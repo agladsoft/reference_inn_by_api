@@ -3,7 +3,7 @@ import json
 import spacy
 import logging
 import requests
-os.environ['XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS'] = "/home/timurzav/PycharmWork/docker_project/reference_inn_by_api"
+
 if not os.path.exists(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging"):
     os.mkdir(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging")
 
@@ -36,7 +36,7 @@ header = {
     "Authorization": "Api-Key AQVN1WLLSufpkWuqCkYaT92hB3YuLcSKDooMbBcL"
 }
 
-replaced_words = ["ООО", "OOO", "OОO", "ОOО", "OOО", "ООO", "ИП", "ЗАО", "3АО", "АО"]
+replaced_words = ["ООО", "OOO", "OОO", "ОOО", "OOО", "ООO", "ОАО", "ИП", "ЗАО", "3АО", "АО"]
 
 
 def get_translate_from_yandex(text):
