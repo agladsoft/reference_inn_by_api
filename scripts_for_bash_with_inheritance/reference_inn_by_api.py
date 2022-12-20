@@ -36,13 +36,17 @@ def add_values_in_dict(provider, dict_data, inn=None, value=None, company_name_r
     if value:
         api_inn, api_name_inn = provider.get_inn_from_value(translated)
         return api_inn, api_name_inn, translated
+    if inn != 'empty':
+        add_inn_to_table(provider, inn, dict_data, translated)
+
+
+def add_inn_to_table(provider, inn, dict_data, translated):
     inn, api_name_inn = provider.get_inn(inn)
     api_name_inn = re.sub(" +", " ", api_name_inn)
     dict_data["company_inn"] = inn
     dict_data["company_name_unified"] = api_name_inn
     api_name_inn = replace_forms_organizations(api_name_inn)
     fuzz_company_name = fuzz.partial_ratio(api_name_inn.upper(), translated.upper())
-    # if fuzz_company_name < 50:
     fuzz_company_name = compare_different_fuzz(api_name_inn, translated, fuzz_company_name, dict_data)
     dict_data['confidence_rate'] = fuzz_company_name
 

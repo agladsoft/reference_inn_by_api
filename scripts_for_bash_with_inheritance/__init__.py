@@ -4,6 +4,7 @@ import spacy
 import logging
 import requests
 
+
 if not os.path.exists(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging"):
     os.mkdir(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging")
 
@@ -22,7 +23,7 @@ if logger_stream.hasHandlers():
 logger_stream.addHandler(console_out)
 logger_stream.setLevel(logging.INFO)
 
-worker_count = 6
+worker_count = 3
 
 nlp = spacy.load('en_core_web_sm')
 
