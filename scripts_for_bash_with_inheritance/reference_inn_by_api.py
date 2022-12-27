@@ -1,6 +1,5 @@
 import re
 import sys
-import json
 import sqlite3
 import contextlib
 import numpy as np
@@ -64,7 +63,9 @@ def get_company_name_by_sentence(provider: GetINNApi, sentence: str) -> Tuple[st
     https://xmlriver.com/search_yandex/xml?user=6390&key=e3b3ac2908b2a9e729f1671218c85e12cfe643b0&query=<value> INN
     """
     translated: str = GoogleTranslator(source='en', target='ru').translate(sentence)
-    translated = translated.translate({ord(c): " " for c in r",'<>«»‘’“”!@#$%^&*()[]{};<>?\|`~-=_+"})
+    translated = translated.translate({ord(c): " " for c in r",'!@#$%^&*()[]{};?\|~-=_+"})
+    for quote in replaced_quotes:
+        translated: str = translated.replace(quote, '"')
     translated = re.sub(" +", " ", translated)
     inn, translated = provider.get_inn_from_value(translated)
     return inn, translated
@@ -78,6 +79,7 @@ def find_international_company(sentence: str, data: dict) -> bool:
         if re.findall(country_and_city, sentence):
             data["is_company_name_international"] = True
             return True
+    data["is_company_name_international"] = False
     return False
 
 
