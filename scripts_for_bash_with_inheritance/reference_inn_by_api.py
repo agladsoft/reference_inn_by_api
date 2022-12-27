@@ -18,69 +18,67 @@ from pandas.io.parsers import TextFileReader
 from deep_translator import GoogleTranslator
 
 
-def lemmatize_sentence(company_name_rus: str) -> str:
+def replace_forms_organizations(company_name: str) -> str:
     """
-    Lemmatization of a sentence in order to unify data.
+    Deleting organization forms for the accuracy of determining confidence_rate.
     """
-    docs = nlp(company_name_rus)
-    company_name_rus: str = " ".join([token.lemma_ for token in docs])
-    docs: list = list(nlp.pipe(company_name_rus))
-    list_letters: list = []
-    for doc in docs:
-        for w in doc:
-            if w.like_num or w.lemma_ == '+' or w.lemma_ == '<' or w.lemma_ == '>':
-                list_letters.append(" ")
-            elif not w.is_punct:
-                list_letters.append(w.lower_)
-    company_name_rus: str = "".join(list_letters)
-    return re.sub(" +", " ", company_name_rus).strip()
+    for elem in replaced_words:
+        company_name: str = company_name.replace(elem, "")
+    return company_name.translate({ord(c): "" for c in '"'}).strip()
 
 
-def do_not_count_company_in_quotes(sentence: str) -> Tuple[str, str]:
+def compare_different_fuzz(company_name: str, translated: str, fuzz_company_name: int, data: dict) -> int:
     """
-    We keep the names of the companies in quotation marks so that lemmatization is not applied to them.
+    Comparing the maximum value of the two confidence_rate.
     """
-    adding_string: str = ""
-    for search_string in ['<<([^"]*)>>', '“([^"]*)”', '"([^"]*)"', "''([^']*)''",
-                          "'([^']*)'", '< <([^"]*)> >', '<  <([^"]*)>  >', '<([^"]*)>', '""([^"]*)""', '`([^"]*)`',
-                          '”([^"]*)”', '‘([^"]*)‘', '’([^"]*)’', '«([^"]*)»']:
-        if delete_string := re.findall(search_string, sentence):
-            sentence: str = sentence.replace(delete_string[0], "")
-            adding_string: str = delete_string[0].lower().strip()
-            break
-    return adding_string, sentence
+    company_name_en: str = GoogleTranslator(source='ru', target='en').translate(company_name)
+    company_name_en = replace_forms_organizations(company_name_en)
+    data["company_name_unified_en"] = company_name_en
+    fuzz_company_name_two: int = fuzz.partial_ratio(company_name_en.upper(), translated.upper())
+    return max(fuzz_company_name, fuzz_company_name_two)
 
 
 def get_company_name_by_inn(provider: GetINNApi, data: dict, inn: list, sentence: str,
-                            lemmatized_sentence: str = None) -> None:
+                            translated: str = None) -> None:
     """
     We get a unified company name from the sentence itself for the found INN. And then we are looking for a company
     on the website https://www.rusprofile.ru/.
     """
-    if not lemmatized_sentence:
-        lemmatized_sentence: str = lemmatize_sentence(sentence)
-        sentence: str = GoogleTranslator(source='en', target='ru').translate(lemmatized_sentence)
+    if not translated:
+        translated: str = GoogleTranslator(source='en', target='ru').translate(sentence)
     data['is_inn_found_auto'] = True
-    data['company_name_rus'] = sentence
-    data['company_name_lemma'] = lemmatized_sentence
+    data['company_name_rus'] = translated
     inn, company_name = provider.get_inn(inn)
     company_name: str = re.sub(" +", " ", company_name)
     data["company_inn"] = inn
     data["company_name_unified"] = company_name
-    data['confidence_rate'] = fuzz.partial_ratio(company_name.upper(), sentence.upper())
+    company_name = replace_forms_organizations(company_name)
+    fuzz_company_name = fuzz.partial_ratio(company_name.upper(), translated.upper())
+    fuzz_company_name = compare_different_fuzz(company_name, translated, fuzz_company_name, data)
+    data['confidence_rate'] = fuzz_company_name
 
 
-def get_company_name_by_sentence(provider: GetINNApi, sentence: str, adding_string: str) -> Tuple[str, str, str]:
+def get_company_name_by_sentence(provider: GetINNApi, sentence: str) -> Tuple[str, str]:
     """
-    We send the sentence to the Yandex search engine (first we pre-process: lemmatize the sentence and
-    translate it into Russian) by the link
+    We send the sentence to the Yandex search engine (first we pre-process: translate it into Russian) by the link
     https://xmlriver.com/search_yandex/xml?user=6390&key=e3b3ac2908b2a9e729f1671218c85e12cfe643b0&query=<value> INN
     """
-    lemmatized_sentence: str = lemmatize_sentence(sentence)
-    lemmatized_sentence = f"{adding_string} {lemmatized_sentence}".strip()
-    translated: str = GoogleTranslator(source='en', target='ru').translate(lemmatized_sentence)
+    translated: str = GoogleTranslator(source='en', target='ru').translate(sentence)
+    translated = translated.translate({ord(c): " " for c in r",'<>«»‘’“”!@#$%^&*()[]{};<>?\|`~-=_+"})
+    translated = re.sub(" +", " ", translated)
     inn, translated = provider.get_inn_from_value(translated)
-    return inn, translated, lemmatized_sentence
+    return inn, translated
+
+
+def find_international_company(sentence: str, data: dict) -> bool:
+    """
+    Looking for international companies.
+    """
+    for country_and_city in countries_and_cities:
+        if re.findall(country_and_city, sentence):
+            data["is_company_name_international"] = True
+            return True
+    return False
 
 
 def get_inn_from_row(sentence: str, data: dict) -> None:
@@ -98,10 +96,11 @@ def get_inn_from_row(sentence: str, data: dict) -> None:
     if list_inn:
         get_company_name_by_inn(cache_inn, data, inn=list_inn[0], sentence=sentence)
     else:
+        if find_international_company(sentence, data):
+            return
         cache_name_inn: GetINNApi = GetINNApi("company_name_and_inn", conn)
-        adding_string, sentence = do_not_count_company_in_quotes(sentence)
-        inn, translated, lemmatized_sentence = get_company_name_by_sentence(cache_name_inn, sentence, adding_string)
-        get_company_name_by_inn(cache_inn, data, inn, translated, lemmatized_sentence)
+        inn, translated = get_company_name_by_sentence(cache_name_inn, sentence)
+        get_company_name_by_inn(cache_inn, data, inn, sentence, translated=translated)
 
 
 def write_to_json(index: int, data: dict) -> None:
@@ -151,10 +150,11 @@ def convert_csv_to_dict(filename: str) -> List[dict]:
     dataframe = dataframe.drop_duplicates(subset='company_name', keep="first")
     dataframe = dataframe.replace({np.nan: None})
     dataframe['company_name_rus'] = None
-    dataframe['company_name_lemma'] = None
+    dataframe['company_name_unified_en'] = None
     dataframe['company_inn'] = None
     dataframe['company_name_unified'] = None
     dataframe['is_inn_found_auto'] = None
+    dataframe["is_company_name_international"] = None
     dataframe['confidence_rate'] = None
     return dataframe.to_dict('records')
 
