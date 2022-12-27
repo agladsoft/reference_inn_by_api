@@ -19,6 +19,9 @@ from deep_translator import GoogleTranslator
 
 
 def lemmatize_sentence(company_name_rus: str) -> str:
+    """
+    Lemmatization of a sentence in order to unify data.
+    """
     docs = nlp(company_name_rus)
     company_name_rus: str = " ".join([token.lemma_ for token in docs])
     docs: list = list(nlp.pipe(company_name_rus))
@@ -34,6 +37,9 @@ def lemmatize_sentence(company_name_rus: str) -> str:
 
 
 def do_not_count_company_in_quotes(sentence: str) -> Tuple[str, str]:
+    """
+    We keep the names of the companies in quotation marks so that lemmatization is not applied to them.
+    """
     adding_string: str = ""
     for search_string in ['<<([^"]*)>>', '“([^"]*)”', '"([^"]*)"', "''([^']*)''",
                           "'([^']*)'", '< <([^"]*)> >', '<  <([^"]*)>  >', '<([^"]*)>', '""([^"]*)""', '`([^"]*)`',
@@ -47,6 +53,10 @@ def do_not_count_company_in_quotes(sentence: str) -> Tuple[str, str]:
 
 def get_company_name_by_inn(provider: GetINNApi, data: dict, inn: list, sentence: str,
                             lemmatized_sentence: str = None) -> None:
+    """
+    We get a unified company name from the sentence itself for the found INN. And then we are looking for a company
+    on the website https://www.rusprofile.ru/.
+    """
     if not lemmatized_sentence:
         lemmatized_sentence: str = lemmatize_sentence(sentence)
         sentence: str = GoogleTranslator(source='en', target='ru').translate(lemmatized_sentence)
@@ -61,6 +71,11 @@ def get_company_name_by_inn(provider: GetINNApi, data: dict, inn: list, sentence
 
 
 def get_company_name_by_sentence(provider: GetINNApi, sentence: str, adding_string: str) -> Tuple[str, str, str]:
+    """
+    We send the sentence to the Yandex search engine (first we pre-process: lemmatize the sentence and
+    translate it into Russian) by the link
+    https://xmlriver.com/search_yandex/xml?user=6390&key=e3b3ac2908b2a9e729f1671218c85e12cfe643b0&query=<value> INN
+    """
     lemmatized_sentence: str = lemmatize_sentence(sentence)
     lemmatized_sentence = f"{adding_string} {lemmatized_sentence}".strip()
     translated: str = GoogleTranslator(source='en', target='ru').translate(lemmatized_sentence)
@@ -69,6 +84,10 @@ def get_company_name_by_sentence(provider: GetINNApi, sentence: str, adding_stri
 
 
 def get_inn_from_row(sentence: str, data: dict) -> None:
+    """
+    Full processing of the sentence, including 1). inn search by offer -> company search by inn,
+    2). inn search in yandex by request -> company search by inn.
+    """
     list_inn: list = []
     inn: list = re.findall(r"\d+", sentence)
     cache_inn: GetINNApi = GetINNApi("inn_and_uni_company_name", conn)
@@ -85,15 +104,10 @@ def get_inn_from_row(sentence: str, data: dict) -> None:
         get_company_name_by_inn(cache_inn, data, inn, translated, lemmatized_sentence)
 
 
-def parse_data(index: int, data: dict) -> None:
-    for key, sentence in data.items():
-        try:
-            if key == 'company_name':
-                get_inn_from_row(sentence, data)
-        except Exception as ex:
-            logger.info(f'Error in inn {ex}: {index} data is {data}')
-            logger_stream.info(f'Error in inn {ex}: {index} data is {data}')
-
+def write_to_json(index: int, data: dict) -> None:
+    """
+    Writing data to json.
+    """
     logger.info(f'{index} data is {data}')
     logger_stream.info(f'{index} data is {data}')
     basename: str = os.path.basename(os.path.abspath(sys.argv[1]))
@@ -102,7 +116,24 @@ def parse_data(index: int, data: dict) -> None:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 
+def parse_data(index: int, data: dict) -> None:
+    """
+    Processing each row.
+    """
+    for key, sentence in data.items():
+        try:
+            if key == 'company_name':
+                get_inn_from_row(sentence, data)
+        except Exception as ex:
+            logger.info(f'Error in inn {ex}: {index} data is {data}')
+            logger_stream.info(f'Error in inn {ex}: {index} data is {data}')
+    write_to_json(index, data)
+
+
 def create_file_for_cache() -> str:
+    """
+    Creating a file for recording INN caches and sentence.
+    """
     path_cache: str = f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/cache_inn/cache_inn.db"
     fle: Path = Path(path_cache)
     if not os.path.exists(os.path.dirname(fle)):
@@ -112,6 +143,9 @@ def create_file_for_cache() -> str:
 
 
 def convert_csv_to_dict(filename: str) -> List[dict]:
+    """
+    Csv data representation in json.
+    """
     dataframe: TextFileReader | DataFrame = pd.read_csv(filename)
     dataframe.columns = ['company_name']
     dataframe = dataframe.drop_duplicates(subset='company_name', keep="first")
