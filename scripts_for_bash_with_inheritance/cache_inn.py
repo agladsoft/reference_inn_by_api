@@ -6,7 +6,6 @@ import validate_inn
 import contextlib
 from __init__ import logger, logger_stream
 import re
-import logging
 
 
 class GetINNApi:
@@ -38,17 +37,21 @@ class GetINNApi:
             return value if value != 'empty' else None, var_api_name
 
     @staticmethod
-    def get_inn_from_html(myroot, index_page, results, list_inn, count_inn):
+    def get_inn_from_site(list_inn, values, count_inn):
+        for item_inn in values:
+            with contextlib.suppress(Exception):
+                inn = validate_inn.validate(item_inn)
+                if inn in list_inn:
+                    count_inn += 1
+                list_inn[inn] = count_inn
+
+    def get_inn_from_html(self, myroot, index_page, results, list_inn, count_inn):
         value = myroot[0][index_page][0][results][1][3][0].text
         title = myroot[0][index_page][0][results][1][1].text
         inn_text = re.findall(r"\d+", value)
         inn_title = re.findall(r"\d+", title)
-        for item_inn, item_title_inn in zip(inn_text, inn_title):
-            with contextlib.suppress(Exception):
-                inn = validate_inn.validate(item_inn) if validate_inn.is_valid(item_inn) else validate_inn.validate(item_title_inn)
-                if inn in list_inn:
-                    count_inn += 1
-                list_inn[inn] = count_inn
+        self.get_inn_from_site(list_inn, inn_text, count_inn)
+        self.get_inn_from_site(list_inn, inn_title, count_inn)
 
     def get_inn_by_yandex(self, value):
         session = HTMLSession()
@@ -63,8 +66,8 @@ class GetINNApi:
             try:
                 self.get_inn_from_html(myroot, index_page, results, list_inn, count_inn)
             except Exception as ex:
-                logger.info(f'Error {ex}: not found an inn in Yandex')
-                logger_stream.info(f'Error {ex}: not found an inn in Yandex')
+                logger.info(f'Error {ex}: the description is not string - {value}')
+                logger_stream.info(f'Error {ex}: the description is not string - {value}')
                 continue
         return max(list_inn, key=list_inn.get) if list_inn else "empty"
 
@@ -93,7 +96,8 @@ class GetINNApi:
                 print(self.cache_add_and_save(api_inn, api_name))
                 break
             else:
-                logging.error(f"Error: {key}")
+                logger.error(f"Error: {api_inn} - {api_name}")
+                logger_stream.error(f"Error: {api_inn} - {api_name}")
         return api_inn, api_name
 
     def get_inn_from_value(self, value):
