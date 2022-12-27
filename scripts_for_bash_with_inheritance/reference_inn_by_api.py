@@ -30,17 +30,17 @@ def lemmatize_sentence(company_name_rus: str) -> str:
             elif not w.is_punct:
                 list_letters.append(w.lower_)
     company_name_rus: str = "".join(list_letters)
-    return re.sub(" +", " ", company_name_rus)
+    return re.sub(" +", " ", company_name_rus).strip()
 
 
 def do_not_count_company_in_quotes(sentence: str) -> Tuple[str, str]:
     adding_string: str = ""
     for search_string in ['<<([^"]*)>>', '“([^"]*)”', '"([^"]*)"', "''([^']*)''",
-                          "'([^']*)'", '< <([^"]*)> >', '<  <([^"]*)>  >',
-                          '<([^"]*)>', '""([^"]*)""']:
+                          "'([^']*)'", '< <([^"]*)> >', '<  <([^"]*)>  >', '<([^"]*)>', '""([^"]*)""', '`([^"]*)`',
+                          '”([^"]*)”', '‘([^"]*)‘', '’([^"]*)’', '«([^"]*)»']:
         if delete_string := re.findall(search_string, sentence):
             sentence: str = sentence.replace(delete_string[0], "")
-            adding_string: str = delete_string[0].lower()
+            adding_string: str = delete_string[0].lower().strip()
             break
     return adding_string, sentence
 
@@ -62,9 +62,8 @@ def get_company_name_by_inn(provider: GetINNApi, data: dict, inn: list, sentence
 
 def get_company_name_by_sentence(provider: GetINNApi, sentence: str, adding_string: str) -> Tuple[str, str, str]:
     lemmatized_sentence: str = lemmatize_sentence(sentence)
-    translated: str = GoogleTranslator(source='en', target='ru').translate(lemmatized_sentence)
     lemmatized_sentence = f"{adding_string} {lemmatized_sentence}".strip()
-    translated = f"{adding_string} {translated}".strip()
+    translated: str = GoogleTranslator(source='en', target='ru').translate(lemmatized_sentence)
     inn, translated = provider.get_inn_from_value(translated)
     return inn, translated, lemmatized_sentence
 
