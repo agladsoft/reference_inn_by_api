@@ -47,7 +47,7 @@ def get_company_name_by_inn(provider: GetINNApi, data: dict, inn: list, sentence
     data['is_inn_found_auto'] = True
     data['company_name_rus'] = translated
     if inn == 'empty':
-        inn, translated = get_company_name_by_sentence(cache_name_inn, sentence, is_english=True)
+        inn, sentence = get_company_name_by_sentence(cache_name_inn, sentence, is_english=True)
     inn, company_name = provider.get_inn(inn)
     company_name: str = re.sub(" +", " ", company_name)
     data["company_inn"] = inn
@@ -83,7 +83,7 @@ def find_international_company(cache_inn: GetINNApi, sentence: str, data: dict) 
     Looking for international companies.
     """
     for country_and_city in countries_and_cities:
-        if re.findall(country_and_city, sentence):
+        if re.findall(country_and_city, sentence.upper()):
             data["is_company_name_international"] = True
             get_company_name_by_inn(cache_inn, data, inn=[], sentence=sentence)
     data["is_company_name_international"] = False
@@ -94,6 +94,7 @@ def get_inn_from_row(sentence: str, data: dict) -> None:
     Full processing of the sentence, including 1). inn search by offer -> company search by inn,
     2). inn search in yandex by request -> company search by inn.
     """
+    sentence = '16700833183; OOO "SADOVAYA TEKHNIKA IINSTRUMENTY"BOLSHAYA POCHTOVAYA STR 40,BUILDING 1, THE 3.FLOOR, ROOM 7A**'
     list_inn: list = []
     inn: list = re.findall(r"\d+", sentence)
     cache_inn: GetINNApi = GetINNApi("inn_and_uni_company_name", conn)
