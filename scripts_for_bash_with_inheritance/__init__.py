@@ -30,7 +30,7 @@ countries_and_cities = ["UZBEKISTAN", "KAZAKHSTAN", "BELARUS", "POLAND", "CZECH"
                         "HELSINKI", "КАЗАХСТАН", "УЗБЕКИСТАН", "БЕЛАРУСЬ", "ТАШКЕНТ", "SCHERPENZEEL", "ASAKA",
                         "HUNGARY", "KYRGYZSTAN", "BISHKEK"]
 
-os.environ['XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS'] = '/home/timurzav/PycharmWork/docker_project/reference_inn_by_api'
+
 if not os.path.exists(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging"):
     os.mkdir(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging")
 
