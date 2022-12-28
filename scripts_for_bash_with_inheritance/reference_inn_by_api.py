@@ -31,7 +31,6 @@ def compare_different_fuzz(company_name: str, translated: str, fuzz_company_name
     Comparing the maximum value of the two confidence_rate.
     """
     company_name_en: str = GoogleTranslator(source='ru', target='en').translate(company_name)
-    company_name_en = replace_forms_organizations(company_name_en)
     data["company_name_unified_en"] = company_name_en
     fuzz_company_name_two: int = fuzz.partial_ratio(company_name_en.upper(), translated.upper())
     return max(fuzz_company_name, fuzz_company_name_two)
@@ -66,21 +65,23 @@ def get_company_name_by_sentence(provider: GetINNApi, sentence: str) -> Tuple[st
     translated = translated.translate({ord(c): " " for c in r",'!@#$%^&*()[]{};?\|~-=_+"})
     for quote in replaced_quotes:
         translated: str = translated.replace(quote, '"')
+    # translated = re.sub(r'\s*("|\')\s*', r'\1', translated)
+    translated = re.sub(r'(")\s*(")', r'\1\2', translated)
+    translated = re.sub(r'(")\1+', r'\1', translated)
     translated = re.sub(" +", " ", translated)
     inn, translated = provider.get_inn_from_value(translated)
     return inn, translated
 
 
-def find_international_company(sentence: str, data: dict) -> bool:
+def find_international_company(cache_inn: GetINNApi, sentence: str, data: dict) -> None:
     """
     Looking for international companies.
     """
     for country_and_city in countries_and_cities:
         if re.findall(country_and_city, sentence):
             data["is_company_name_international"] = True
-            return True
+            get_company_name_by_inn(cache_inn, data, inn=[], sentence=sentence)
     data["is_company_name_international"] = False
-    return False
 
 
 def get_inn_from_row(sentence: str, data: dict) -> None:
@@ -95,11 +96,10 @@ def get_inn_from_row(sentence: str, data: dict) -> None:
         with contextlib.suppress(Exception):
             item_inn2 = validate_inn.validate(item_inn)
             list_inn.append(item_inn2)
+    find_international_company(cache_inn, sentence, data)
     if list_inn:
         get_company_name_by_inn(cache_inn, data, inn=list_inn[0], sentence=sentence)
     else:
-        if find_international_company(sentence, data):
-            return
         cache_name_inn: GetINNApi = GetINNApi("company_name_and_inn", conn)
         inn, translated = get_company_name_by_sentence(cache_name_inn, sentence)
         get_company_name_by_inn(cache_inn, data, inn, sentence, translated=translated)
