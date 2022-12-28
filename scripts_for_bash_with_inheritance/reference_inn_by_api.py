@@ -37,7 +37,7 @@ def compare_different_fuzz(company_name: str, translated: str, fuzz_company_name
 
 
 def get_company_name_by_inn(provider: GetINNApi, data: dict, inn: list, sentence: str,
-                            translated: str = None) -> None:
+                            translated: str = None, cache_name_inn: GetINNApi = None) -> None:
     """
     We get a unified company name from the sentence itself for the found INN. And then we are looking for a company
     on the website https://www.rusprofile.ru/.
@@ -46,6 +46,8 @@ def get_company_name_by_inn(provider: GetINNApi, data: dict, inn: list, sentence
         translated: str = GoogleTranslator(source='en', target='ru').translate(sentence)
     data['is_inn_found_auto'] = True
     data['company_name_rus'] = translated
+    if inn == 'empty':
+        inn, translated = get_company_name_by_sentence(cache_name_inn, sentence, is_english=True)
     inn, company_name = provider.get_inn(inn)
     company_name: str = re.sub(" +", " ", company_name)
     data["company_inn"] = inn
@@ -56,19 +58,22 @@ def get_company_name_by_inn(provider: GetINNApi, data: dict, inn: list, sentence
     data['confidence_rate'] = fuzz_company_name
 
 
-def get_company_name_by_sentence(provider: GetINNApi, sentence: str) -> Tuple[str, str]:
+def get_company_name_by_sentence(provider: GetINNApi, sentence: str, is_english: bool = False) -> Tuple[str, str]:
     """
     We send the sentence to the Yandex search engine (first we pre-process: translate it into Russian) by the link
     https://xmlriver.com/search_yandex/xml?user=6390&key=e3b3ac2908b2a9e729f1671218c85e12cfe643b0&query=<value> INN
     """
-    translated: str = GoogleTranslator(source='en', target='ru').translate(sentence)
-    translated = translated.translate({ord(c): " " for c in r",'!@#$%^&*()[]{};?\|~-=_+"})
+    sentence = sentence.translate({ord(c): " " for c in r",'!@#$%^&*()[]{};?\|~-=_+"})
+    if is_english:
+        inn, translated = provider.get_inn_from_value(sentence)
+        return inn, translated
     for quote in replaced_quotes:
-        translated: str = translated.replace(quote, '"')
-    # translated = re.sub(r'\s*("|\')\s*', r'\1', translated)
-    translated = re.sub(r'(")\s*(")', r'\1\2', translated)
-    translated = re.sub(r'(")\1+', r'\1', translated)
-    translated = re.sub(" +", " ", translated)
+        sentence: str = sentence.replace(quote, '"')
+    # sentence = re.sub(r'\s*("|\')\s*', r'\1', sentence)
+    sentence = re.sub(r'(")\s*(")', r'\1\2', sentence)
+    sentence = re.sub(r'(")\1+', r'\1', sentence)
+    sentence = re.sub(" +", " ", sentence)
+    translated: str = GoogleTranslator(source='en', target='ru').translate(sentence)
     inn, translated = provider.get_inn_from_value(translated)
     return inn, translated
 
@@ -102,7 +107,7 @@ def get_inn_from_row(sentence: str, data: dict) -> None:
     else:
         cache_name_inn: GetINNApi = GetINNApi("company_name_and_inn", conn)
         inn, translated = get_company_name_by_sentence(cache_name_inn, sentence)
-        get_company_name_by_inn(cache_inn, data, inn, sentence, translated=translated)
+        get_company_name_by_inn(cache_inn, data, inn, sentence, translated=translated, cache_name_inn=cache_name_inn)
 
 
 def write_to_json(index: int, data: dict) -> None:

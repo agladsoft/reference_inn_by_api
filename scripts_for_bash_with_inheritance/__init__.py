@@ -3,7 +3,7 @@ import json
 import logging
 import requests
 
-worker_count = 1
+worker_count = 6
 
 
 def get_translate_from_yandex(text):
