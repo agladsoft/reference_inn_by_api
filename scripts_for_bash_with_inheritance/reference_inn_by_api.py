@@ -94,7 +94,6 @@ def get_inn_from_row(sentence: str, data: dict) -> None:
     Full processing of the sentence, including 1). inn search by offer -> company search by inn,
     2). inn search in yandex by request -> company search by inn.
     """
-    sentence = '16700833183; OOO "SADOVAYA TEKHNIKA IINSTRUMENTY"BOLSHAYA POCHTOVAYA STR 40,BUILDING 1, THE 3.FLOOR, ROOM 7A**'
     list_inn: list = []
     inn: list = re.findall(r"\d+", sentence)
     cache_inn: GetINNApi = GetINNApi("inn_and_uni_company_name", conn)
