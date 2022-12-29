@@ -29,7 +29,9 @@ replaced_words = ["ООО", "OOO", "OОO", "ОOО", "OOО", "ООO", "ОАО", "
 countries_and_cities = ["UZBEKISTAN", "KAZAKHSTAN", "BELARUS", "POLAND", "CZECH", "AMSTERDAM", "ROTTERDAM", "НИДЕРЛАНД",
                         "HELSINKI", "КАЗАХСТАН", "УЗБЕКИСТАН", "БЕЛАРУСЬ", "ТАШКЕНТ", "SCHERPENZEEL", "ASAKA",
                         "HUNGARY", "KYRGYZSTAN", "BISHKEK", "BANGLADESH", "NETHERLANDS", "BELGIUM", "WARSAW", "POLSKA",
-                        "TASHKENT"]
+                        "TASHKENT", "ESENTEPE", "BANKASI", "WARSZAWA", "GERMANY", "PHILIPPSBURG", "NEDERLAND",
+                        "SCHERPENZEEL", "GDYNIA", "SWIDNICA", "SZCZECIN", "BURGAN BANK", "TURKEY", "ISTANBUL",
+                        "UNITED KINGDOM", "ATHENA", "ANGLIA", "SUFFOLK", "CHELMSFORD", "WOLFSBURG", "SLOVAKIA"]
 
 
 if not os.path.exists(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging"):
