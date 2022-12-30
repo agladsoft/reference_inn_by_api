@@ -31,7 +31,9 @@ countries_and_cities = ["UZBEKISTAN", "KAZAKHSTAN", "BELARUS", "POLAND", "CZECH"
                         "HUNGARY", "KYRGYZSTAN", "BISHKEK", "BANGLADESH", "NETHERLANDS", "BELGIUM", "WARSAW", "POLSKA",
                         "TASHKENT", "ESENTEPE", "BANKASI", "WARSZAWA", "GERMANY", "PHILIPPSBURG", "NEDERLAND",
                         "SCHERPENZEEL", "GDYNIA", "SWIDNICA", "SZCZECIN", "BURGAN BANK", "TURKEY", "ISTANBUL",
-                        "UNITED KINGDOM", "ATHENA", "ANGLIA", "SUFFOLK", "CHELMSFORD", "WOLFSBURG", "SLOVAKIA"]
+                        "UNITED KINGDOM", "ATHENA", "ANGLIA", "SUFFOLK", "CHELMSFORD", "WOLFSBURG", "SLOVAKIA",
+                        "ALMATY", "BANGLADESH", "KOREA", "SEOUL", "ZASCIANKI", "TORUN", "MONGOLIA", "FRANCE", "GDYNIA",
+                        "BELSK DUZY", "SCHERPENZEEL", "KYRGYZSTAN", "NUR-SULTA", "KYRGYZ REPUBLIC"]
 
 
 if not os.path.exists(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging"):

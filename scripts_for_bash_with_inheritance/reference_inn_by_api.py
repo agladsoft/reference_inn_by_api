@@ -26,6 +26,14 @@ def replace_forms_organizations(company_name: str) -> str:
     return company_name.translate({ord(c): "" for c in '"'}).strip()
 
 
+def replace_quotes(sentence: str, quotes: list = replaced_quotes, replaced_str: str = '"') -> None:
+    """
+    Deleting organization forms for the accuracy of determining confidence_rate.
+    """
+    for quote in quotes:
+        sentence = sentence.replace(quote, replaced_str)
+
+
 def compare_different_fuzz(company_name: str, translated: str, fuzz_company_name: int, data: dict) -> int:
     """
     Comparing the maximum value of the two confidence_rate.
@@ -47,7 +55,7 @@ def get_company_name_by_inn(provider: GetINNApi, data: dict, inn: list, sentence
     data['is_inn_found_auto'] = True
     data['company_name_rus'] = translated
     if inn == 'empty':
-        inn, sentence = get_company_name_by_sentence(cache_name_inn, sentence, is_english=True)
+        inn, translated = get_company_name_by_sentence(cache_name_inn, translated, is_english=True)
     inn, company_name = provider.get_inn(inn)
     company_name: str = re.sub(" +", " ", company_name)
     data["company_inn"] = inn
@@ -63,17 +71,18 @@ def get_company_name_by_sentence(provider: GetINNApi, sentence: str, is_english:
     We send the sentence to the Yandex search engine (first we pre-process: translate it into Russian) by the link
     https://xmlriver.com/search_yandex/xml?user=6390&key=e3b3ac2908b2a9e729f1671218c85e12cfe643b0&query=<value> INN
     """
-    sentence = sentence.translate({ord(c): " " for c in r",'!@#$%^&*()[]{};?\|~-=_+"})
+    sentence: str = sentence.translate({ord(c): " " for c in r",'!@#$%^&*()[]{};?\|~-=_+"})
     if is_english:
+        sentence = sentence.replace('"', "")
         inn, translated = provider.get_inn_from_value(sentence)
         return inn, translated
-    for quote in replaced_quotes:
-        sentence: str = sentence.replace(quote, '"')
+    replace_quotes(sentence)
     # sentence = re.sub(r'\s*("|\')\s*', r'\1', sentence)
     sentence = re.sub(r'(")\s*(")', r'\1\2', sentence)
     sentence = re.sub(r'(")\1+', r'\1', sentence)
     sentence = re.sub(" +", " ", sentence)
     translated: str = GoogleTranslator(source='en', target='ru').translate(sentence)
+    replace_quotes(translated, quotes=['"'], replaced_str='')
     inn, translated = provider.get_inn_from_value(translated)
     return inn, translated
 
@@ -83,7 +92,7 @@ def find_international_company(cache_inn: GetINNApi, sentence: str, data: dict) 
     Looking for international companies.
     """
     for country_and_city in countries_and_cities:
-        if re.findall(country_and_city, sentence.upper()):
+        if re.findall(country_and_city, sentence.upper()) and not re.findall("RUSSIA", sentence.upper()):
             data["is_company_name_international"] = True
             get_company_name_by_inn(cache_inn, data, inn=[], sentence=sentence)
     data["is_company_name_international"] = False
