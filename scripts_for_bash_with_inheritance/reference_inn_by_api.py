@@ -26,12 +26,13 @@ def replace_forms_organizations(company_name: str) -> str:
     return company_name.translate({ord(c): "" for c in '"'}).strip()
 
 
-def replace_quotes(sentence: str, quotes: list = replaced_quotes, replaced_str: str = '"') -> None:
+def replace_quotes(sentence: str, quotes: list = replaced_quotes, replaced_str: str = '"') -> str:
     """
     Deleting organization forms for the accuracy of determining confidence_rate.
     """
     for quote in quotes:
         sentence = sentence.replace(quote, replaced_str)
+    return sentence
 
 
 def compare_different_fuzz(company_name: str, translated: str, fuzz_company_name: int, data: dict) -> int:
@@ -76,14 +77,13 @@ def get_company_name_by_sentence(provider: GetINNApi, sentence: str, is_english:
         sentence = sentence.replace('"', "")
         inn, translated = provider.get_inn_from_value(sentence)
         return inn, translated
-    replace_quotes(sentence)
-    # sentence = re.sub(r'\s*("|\')\s*', r'\1', sentence)
+    sentence = replace_quotes(sentence)
     sentence = re.sub(r'(")\s*(")', r'\1\2', sentence)
     sentence = re.sub(r'(")\1+', r'\1', sentence)
-    sentence = re.sub(" +", " ", sentence)
+    sentence = re.sub(" +", " ", sentence).strip()
     translated: str = GoogleTranslator(source='en', target='ru').translate(sentence)
-    replace_quotes(translated, quotes=['"'], replaced_str=' ')
-    translated = re.sub(" +", " ", translated)
+    translated = replace_quotes(translated, quotes=['"'], replaced_str=' ')
+    translated = re.sub(" +", " ", translated).strip()
     inn, translated = provider.get_inn_from_value(translated)
     return inn, translated
 
