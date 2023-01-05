@@ -22,7 +22,7 @@ header = {
     "Authorization": "Api-Key AQVN1WLLSufpkWuqCkYaT92hB3YuLcSKDooMbBcL"
 }
 
-replaced_quotes = ["<", ">", "«", "»", "’", "‘", "“", "”", "`"]
+replaced_quotes = ["<", ">", "«", "»", "’", "‘", "“", "”", "`", "'", '"']
 
 replaced_words = ["ООО", "OOO", "OОO", "ОOО", "OOО", "ООO", "ОАО", "ИП", "ЗАО", "3АО", "АО"]
 

@@ -77,12 +77,10 @@ def get_company_name_by_sentence(provider: GetINNApi, sentence: str, is_english:
         sentence = sentence.replace('"', "")
         inn, translated = provider.get_inn_from_value(sentence)
         return inn, translated
-    sentence = replace_quotes(sentence)
-    sentence = re.sub(r'(")\s*(")', r'\1\2', sentence)
-    sentence = re.sub(r'(")\1+', r'\1', sentence)
+    sentence = replace_quotes(sentence, replaced_str=' ')
     sentence = re.sub(" +", " ", sentence).strip()
     translated: str = GoogleTranslator(source='en', target='ru').translate(sentence)
-    translated = replace_quotes(translated, quotes=['"'], replaced_str=' ')
+    translated = replace_quotes(translated, quotes=['"', '«', '»'], replaced_str=' ')
     translated = re.sub(" +", " ", translated).strip()
     inn, translated = provider.get_inn_from_value(translated)
     return inn, translated
