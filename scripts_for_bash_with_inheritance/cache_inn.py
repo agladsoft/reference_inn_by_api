@@ -41,9 +41,7 @@ class GetINNApi:
         for item_inn in values:
             with contextlib.suppress(Exception):
                 inn = validate_inn.validate(item_inn)
-                if inn in list_inn:
-                    count_inn += 1
-                list_inn[inn] = count_inn
+                list_inn[inn] = list_inn[inn] + 1 if inn in list_inn else count_inn
 
     def get_inn_from_html(self, myroot, index_page, results, list_inn, count_inn):
         value = myroot[0][index_page][0][results][1][3][0].text
