@@ -72,7 +72,7 @@ def get_company_name_by_sentence(provider: GetINNApi, sentence: str, is_english:
     We send the sentence to the Yandex search engine (first we pre-process: translate it into Russian) by the link
     https://xmlriver.com/search_yandex/xml?user=6390&key=e3b3ac2908b2a9e729f1671218c85e12cfe643b0&query=<value> INN
     """
-    sentence: str = sentence.translate({ord(c): " " for c in r"!@#$%^&*()[]{};?\|~=_+"})
+    sentence: str = sentence.translate({ord(c): " " for c in r".,!@#$%^&*()[]{};?\|~=_+"})
     if is_english:
         sentence = sentence.replace('"', "")
         inn, translated = provider.get_inn_from_value(sentence)
