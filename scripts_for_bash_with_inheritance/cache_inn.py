@@ -14,7 +14,8 @@ class GetINNApi:
         self.conn = conn
         self.cur = self.load_cache()
 
-    def get_inn_by_api(self, value, id, var_api_name=None):
+    @staticmethod
+    def get_inn_by_api(value, id, var_api_name=None):
         try:
             session = HTMLSession()
             api_inn = session.get(f'https://www.rusprofile.ru/search?query={value}')
@@ -36,17 +37,19 @@ class GetINNApi:
             return value if value != 'empty' else None, var_api_name
 
     @staticmethod
-    def get_inn_from_html(myroot, index_page, results, list_inn, count_inn):
+    def get_inn_from_site(list_inn, values, count_inn):
+        for item_inn in values:
+            with contextlib.suppress(Exception):
+                inn = validate_inn.validate(item_inn)
+                list_inn[inn] = list_inn[inn] + 1 if inn in list_inn else count_inn
+
+    def get_inn_from_html(self, myroot, index_page, results, list_inn, count_inn):
         value = myroot[0][index_page][0][results][1][3][0].text
         title = myroot[0][index_page][0][results][1][1].text
         inn_text = re.findall(r"\d+", value)
         inn_title = re.findall(r"\d+", title)
-        for item_inn, item_title_inn in zip(inn_text, inn_title):
-            with contextlib.suppress(Exception):
-                inn = validate_inn.validate(item_inn) if validate_inn.is_valid(item_inn) else validate_inn.validate(item_title_inn)
-                if inn in list_inn:
-                    count_inn += 1
-                list_inn[inn] = count_inn
+        self.get_inn_from_site(list_inn, inn_text, count_inn)
+        self.get_inn_from_site(list_inn, inn_title, count_inn)
 
     def get_inn_by_yandex(self, value):
         session = HTMLSession()
