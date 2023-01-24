@@ -57,8 +57,8 @@ def add_values_in_dict(provider, dict_data, inn=None, value=None, company_name_r
     inn, api_name_inn = provider.get_inn(inn)
     translated = re.sub(" +", " ", translated)
     api_name_inn = re.sub(" +", " ", api_name_inn)
-    translated = translated.translate({ord(c): " " for c in ",'!@#$%^&*()[]{};<>?\|`~-=_+"})
-    api_name_inn = api_name_inn.translate({ord(c): "" for c in ",'!@#$%^&*()[]{};<>?\|`~-=_+"})
+    translated = translated.translate({ord(c): " " for c in ",'!@#$%^&*()[]{};<>?\|`~=_+"})
+    api_name_inn = api_name_inn.translate({ord(c): "" for c in ",'!@#$%^&*()[]{};<>?\|`~=_+"})
     dict_data['company_name_rus'] = translated
     dict_data["company_inn"] = inn
     dict_data["company_name_unified"] = api_name_inn
