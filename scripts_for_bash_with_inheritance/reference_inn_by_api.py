@@ -88,13 +88,14 @@ def get_company_name_by_sentence(provider: GetINNApi, sentence: str, is_english:
 
 def find_international_company(cache_inn: GetINNApi, sentence: str, data: dict) -> None:
     """
-    Looking for international companies.
+    Search for international companies.
     """
     for country_and_city in countries_and_cities:
         if re.findall(country_and_city, sentence.upper()) and not re.findall("RUSSIA", sentence.upper()):
             data["is_company_name_international"] = True
             get_company_name_by_inn(cache_inn, data, inn=[], sentence=sentence)
-    data["is_company_name_international"] = False
+    if not data["is_company_name_international"]:
+        data["is_company_name_international"] = False
 
 
 def get_inn_from_row(sentence: str, data: dict) -> None:
@@ -123,7 +124,7 @@ def write_to_json(index: int, data: dict) -> None:
     Writing data to json.
     """
     logger.info(f'{index} data is {data}')
-    logger_stream.info(f'{index} data is {data}')
+    # logger_stream.info(f'{index} data is {data}')
     basename: str = os.path.basename(os.path.abspath(sys.argv[1]))
     output_file_path: str = os.path.join(sys.argv[2], f'{basename}_{index}.json')
     with open(f"{output_file_path}", 'w', encoding='utf-8') as f:
