@@ -141,12 +141,22 @@ def parse_data(index: int, data: dict) -> None:
         try:
             if key == 'company_name':
                 get_inn_from_row(sentence, data, index)
-        except Exception as ex:
+        except (IndexError, ValueError, TypeError) as ex:
             logger.error(f'Error: not found inn in Yandex {index, sentence} (most likely a foreign company). '
                          f'Exception - {ex}')
             logger_stream.error(f'Error: not found inn in Yandex {index, sentence} (most likely a foreign company). '
                                 f'Exception - {ex}')
     write_to_json(index, data)
+
+
+def on_error(e):
+    """
+    Interrupt all processors in case of an error.
+    """
+    if type(e) is AssertionError:
+        global terminated
+        terminated = True
+        pool.terminate()
 
 
 def create_file_for_cache() -> str:
@@ -182,11 +192,17 @@ def convert_csv_to_dict(filename: str) -> List[dict]:
 if __name__ == "__main__":
     procs: list = []
     path: str = create_file_for_cache()
+    terminated: bool = False
     conn: Connection = sqlite3.connect(path)
     parsed_data: List[dict] = convert_csv_to_dict(os.path.abspath(sys.argv[1]))
-    with Pool(processes=worker_count) as pool:
-        for i, dict_data in enumerate(parsed_data, 2):
-            proc = pool.apply_async(parse_data, (i, dict_data))
-            procs.append(proc)
-        [proc.get() for proc in procs]
+    pool: Pool() = Pool(processes=worker_count)
+    results: list = [pool.apply_async(parse_data, (i, dict_data), error_callback=on_error)
+                     for i, dict_data in enumerate(parsed_data, 2)]
+    pool.close()
+    pool.join()
+    if not terminated:
+        for r in results:
+            r.get()
+    else:
+        sys.exit(1)
     conn.close()

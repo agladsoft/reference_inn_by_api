@@ -1,3 +1,4 @@
+import sys
 import xml.etree.ElementTree as ET
 from requests_html import HTMLSession
 from bs4 import BeautifulSoup
@@ -51,12 +52,27 @@ class InnApi:
         self.get_inn_from_site(list_inn, inn_text, count_inn)
         self.get_inn_from_site(list_inn, inn_title, count_inn)
 
+    @staticmethod
+    def get_code_error(error_code: ET, index: int, error_message: str = None):
+        if error_code.tag == 'error':
+            if error_code.attrib['code'] == '200':
+                error_message = f"Error: the money ran out. Index is {index}. Exception - {error_code.text}"
+                logger.error(error_message)
+                logger_stream.error(f"закончились_деньги_на_строке_{index}")
+            elif error_code.attrib['code'] == '110':
+                error_message = f"Error: there are no free channels for data collection. Index is {index}. " \
+                                f"Exception - {error_code.text}"
+                logger.error(error_message)
+                logger_stream.error(f"нет_свободных_каналов_на_строке_{index}")
+            raise AssertionError(error_message)
+
     def get_inn_by_yandex(self, value, index):
         session = HTMLSession()
-        r = session.get(
-            f"https://xmlriver.com/search_yandex/xml?user=6390&key=e3b3ac2908b2a9e729f1671218c85e12cfe643b0&query={value} ИНН")
+        r = session.get(f"https://xmlriver.com/search_yandex/xml?user=6390&key=e3b3ac2908b2a9e729f1671218c85e12cfe643b0"
+                        f"&query={value} ИНН")
         xml_code = r.html.html
         myroot = ET.fromstring(xml_code)
+        self.get_code_error(myroot[0][0], index)
         index_page = 2 if myroot[0][1].tag == 'correct' else 1
         last_range = int(myroot[0][index_page][0][0].attrib['last'])
         list_inn = {}
