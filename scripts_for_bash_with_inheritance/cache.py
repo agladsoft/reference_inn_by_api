@@ -56,7 +56,7 @@ class InnApi:
     def get_code_error(error_code: ET, index: int):
         if error_code.tag == 'error':
             if error_code.attrib['code'] == '200':
-                error_message = f"Error: the money ran out. Index is {index}. Exception - {error_code.text}"
+                error_message: str = f"Error: the money ran out. Index is {index}. Exception - {error_code.text}"
                 logger.error(error_message)
                 logger_stream.error(f"закончились_деньги_на_строке_{index}")
             elif error_code.attrib['code'] == '110':
