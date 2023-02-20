@@ -149,7 +149,7 @@ def parse_data(index: int, data: dict) -> None:
     write_to_json(index, data)
 
 
-def on_error(e):
+def terminate_processors(e):
     """
     Interrupt all processors in case of an error.
     """
@@ -196,7 +196,7 @@ if __name__ == "__main__":
     conn: Connection = sqlite3.connect(path)
     parsed_data: List[dict] = convert_csv_to_dict(os.path.abspath(sys.argv[1]))
     pool: Pool() = Pool(processes=worker_count)
-    results: list = [pool.apply_async(parse_data, (i, dict_data), error_callback=on_error)
+    results: list = [pool.apply_async(parse_data, (i, dict_data), error_callback=terminate_processors)
                      for i, dict_data in enumerate(parsed_data, 2)]
     pool.close()
     pool.join()
