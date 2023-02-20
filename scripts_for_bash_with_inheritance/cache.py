@@ -53,7 +53,7 @@ class InnApi:
         self.get_inn_from_site(list_inn, inn_title, count_inn)
 
     @staticmethod
-    def get_code_error(error_code: ET, index: int, error_message: str = None):
+    def get_code_error(error_code: ET, index: int):
         if error_code.tag == 'error':
             if error_code.attrib['code'] == '200':
                 error_message = f"Error: the money ran out. Index is {index}. Exception - {error_code.text}"
@@ -64,6 +64,10 @@ class InnApi:
                                 f"Exception - {error_code.text}"
                 logger.error(error_message)
                 logger_stream.error(f"нет_свободных_каналов_на_строке_{index}")
+            else:
+                error_message = f"Error: not found code error. Index is {index}. Exception - {error_code.text}"
+                logger.error(error_message)
+                logger_stream.error(f"необработанная_ошибка_{index}")
             raise AssertionError(error_message)
 
     def get_inn_by_yandex(self, value, index):
