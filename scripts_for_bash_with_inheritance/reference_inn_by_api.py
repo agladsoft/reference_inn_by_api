@@ -9,9 +9,9 @@ from __init__ import *
 from pathlib import Path
 from fuzzywuzzy import fuzz
 from pandas import DataFrame
+from cache_inn import InnApi
 from typing import List, Tuple
 from sqlite3 import Connection
-from cache_inn import GetINNApi
 from multiprocessing import Pool
 from pandas.io.parsers import TextFileReader
 from deep_translator import GoogleTranslator
@@ -45,8 +45,8 @@ def compare_different_fuzz(company_name: str, translated: str, fuzz_company_name
     return max(fuzz_company_name, fuzz_company_name_two)
 
 
-def get_company_name_by_inn(provider: GetINNApi, data: dict, inn: list, sentence: str,
-                            translated: str = None, cache_name_inn: GetINNApi = None) -> None:
+def get_company_name_by_inn(provider: InnApi, data: dict, inn: list, sentence: str,
+                            translated: str = None, cache_name_inn: InnApi = None) -> None:
     """
     We get a unified company name from the sentence itself for the found INN. And then we are looking for a company
     on the website https://www.rusprofile.ru/.
@@ -67,7 +67,7 @@ def get_company_name_by_inn(provider: GetINNApi, data: dict, inn: list, sentence
     data['confidence_rate'] = fuzz_company_name
 
 
-def get_company_name_by_sentence(provider: GetINNApi, sentence: str, is_english: bool = False) -> Tuple[str, str]:
+def get_company_name_by_sentence(provider: InnApi, sentence: str, is_english: bool = False) -> Tuple[str, str]:
     """
     We send the sentence to the Yandex search engine (first we pre-process: translate it into Russian) by the link
     https://xmlriver.com/search_yandex/xml?user=6390&key=e3b3ac2908b2a9e729f1671218c85e12cfe643b0&query=<value> INN
@@ -86,7 +86,7 @@ def get_company_name_by_sentence(provider: GetINNApi, sentence: str, is_english:
     return inn, translated
 
 
-def find_international_company(cache_inn: GetINNApi, sentence: str, data: dict) -> None:
+def find_international_company(cache_inn: InnApi, sentence: str, data: dict) -> None:
     """
     Search for international companies.
     """
@@ -105,7 +105,7 @@ def get_inn_from_row(sentence: str, data: dict) -> None:
     """
     list_inn: list = []
     inn: list = re.findall(r"\d+", sentence)
-    cache_inn: GetINNApi = GetINNApi("inn_and_uni_company_name", conn)
+    cache_inn: InnApi = InnApi("inn_and_uni_company_name", conn)
     for item_inn in inn:
         with contextlib.suppress(Exception):
             item_inn2 = validate_inn.validate(item_inn)
@@ -114,7 +114,7 @@ def get_inn_from_row(sentence: str, data: dict) -> None:
     if list_inn:
         get_company_name_by_inn(cache_inn, data, inn=list_inn[0], sentence=sentence)
     else:
-        cache_name_inn: GetINNApi = GetINNApi("company_name_and_inn", conn)
+        cache_name_inn: InnApi = InnApi("company_name_and_inn", conn)
         inn, translated = get_company_name_by_sentence(cache_name_inn, sentence)
         get_company_name_by_inn(cache_inn, data, inn, sentence, translated=translated, cache_name_inn=cache_name_inn)
 

@@ -8,7 +8,7 @@ from __init__ import logger, logger_stream
 import re
 
 
-class GetINNApi:
+class InnApi:
     def __init__(self, table_name, conn):
         self.table_name = table_name
         self.conn = conn
@@ -102,7 +102,6 @@ class GetINNApi:
         rows = self.cur.execute('SELECT * FROM "{}" WHERE key=?'.format(self.table_name.replace('"', '""')), (value,))
         rows = list(rows)
         if rows and rows[0][1] != "empty":
-            print(f"Данные есть в кэше: Полное наименование - {rows[0][0]}, ИНН - {rows[0][1]}")
             return rows[0][1], rows[0][0]
         for key in [value]:
             api_inn = self.get_inn_by_yandex(key)
@@ -112,7 +111,7 @@ class GetINNApi:
                     data = (api_inn, value)
                     self.cur.execute(sql_update_query, data)
                     self.conn.commit()
-            print(self.cache_add_and_save(value, api_inn))
+            self.cache_add_and_save(value, api_inn)
         return api_inn, value
 
     def cache_add_and_save(self, api_inn, api_name):
@@ -123,6 +122,6 @@ class GetINNApi:
 
 if __name__ == "__main__":
     conn = sqlite3.connect("cache_inn.db")
-    get_inn_api = GetINNApi("inn_and_uni_company_name", conn)
+    get_inn_api = InnApi("inn_and_uni_company_name", conn)
     # print(get_inn_api.get_inn("781310635186"))
     print(get_inn_api.get_inn("1658008723"))

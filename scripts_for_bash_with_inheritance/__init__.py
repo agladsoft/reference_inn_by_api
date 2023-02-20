@@ -1,3 +1,4 @@
+import datetime
 import os
 import json
 import logging
@@ -41,12 +42,13 @@ if not os.path.exists(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPT
     os.mkdir(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging")
 
 json_handler = logging.FileHandler(filename=f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging/"
-                                            f"{os.path.basename(__file__)}.log")
+                                            f"logging_{datetime.datetime.now().date()}.log")
 logger = logging.getLogger("file_handler")
 if logger.hasHandlers():
     logger.handlers.clear()
 logger.addHandler(json_handler)
 logger.setLevel(logging.INFO)
+logger.info(f'{datetime.datetime.now()}')
 
 console_out = logging.StreamHandler()
 logger_stream = logging.getLogger("stream")
