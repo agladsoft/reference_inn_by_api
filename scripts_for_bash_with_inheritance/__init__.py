@@ -6,6 +6,9 @@ import requests
 
 worker_count = 4
 
+user_xml_river = "6390"
+key_xml_river = "e3b3ac2908b2a9e729f1671218c85e12cfe643b0"
+
 
 def get_translate_from_yandex(text):
     body["texts"] = text

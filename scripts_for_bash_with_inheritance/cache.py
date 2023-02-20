@@ -1,11 +1,11 @@
-import sys
+import re
+import contextlib
+import validate_inn
+from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
 from requests_html import HTMLSession
-from bs4 import BeautifulSoup
-import validate_inn
-import contextlib
 from __init__ import logger, logger_stream
-import re
+from __init__ import user_xml_river, key_xml_river
 
 
 class InnApi:
@@ -72,7 +72,7 @@ class InnApi:
 
     def get_inn_by_yandex(self, value, index):
         session = HTMLSession()
-        r = session.get(f"https://xmlriver.com/search_yandex/xml?user=6390&key=e3b3ac2908b2a9e729f1671218c85e12cfe643b0"
+        r = session.get(f"https://xmlriver.com/search_yandex/xml?user={user_xml_river}&key={key_xml_river}"
                         f"&query={value} ИНН")
         xml_code = r.html.html
         myroot = ET.fromstring(xml_code)
