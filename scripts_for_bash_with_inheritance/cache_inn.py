@@ -94,8 +94,8 @@ class GetINNApi:
                 print(self.cache_add_and_save(api_inn, api_name))
                 break
             else:
-                logger.error(f"Error: {api_inn} - {api_name}")
-                logger_stream.error(f"Error: {api_inn} - {api_name}")
+                logger.error(f"Error: INN not found in rusprofile {api_inn} - {api_name}")
+                logger_stream.error(f"Error INN not found in rusprofile {api_inn} - {api_name}")
         return api_inn, api_name
 
     def get_inn_from_value(self, value):

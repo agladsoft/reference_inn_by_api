@@ -58,8 +58,8 @@ def get_company_name_by_inn(provider: GetINNApi, data: dict, inn: list, sentence
     if inn == 'empty':
         inn, translated = get_company_name_by_sentence(cache_name_inn, translated, is_english=True)
     inn, company_name = provider.get_inn(inn)
-    company_name: str = re.sub(" +", " ", company_name)
     data["company_inn"] = inn
+    company_name: str = re.sub(" +", " ", company_name)
     data["company_name_unified"] = company_name
     company_name = replace_forms_organizations(company_name)
     fuzz_company_name = fuzz.partial_ratio(company_name.upper(), translated.upper())
@@ -110,7 +110,7 @@ def get_inn_from_row(sentence: str, data: dict) -> None:
         with contextlib.suppress(Exception):
             item_inn2 = validate_inn.validate(item_inn)
             list_inn.append(item_inn2)
-    find_international_company(cache_inn, sentence, data)
+    # find_international_company(cache_inn, sentence, data)
     if list_inn:
         get_company_name_by_inn(cache_inn, data, inn=list_inn[0], sentence=sentence)
     else:
@@ -170,7 +170,7 @@ def convert_csv_to_dict(filename: str) -> List[dict]:
     dataframe['company_inn'] = None
     dataframe['company_name_unified'] = None
     dataframe['is_inn_found_auto'] = None
-    dataframe["is_company_name_international"] = None
+    # dataframe["is_company_name_international"] = None
     dataframe['confidence_rate'] = None
     return dataframe.to_dict('records')
 
