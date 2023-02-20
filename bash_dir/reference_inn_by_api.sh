@@ -62,7 +62,7 @@ do
 	then
 	  mv "${csv_name}" "${done_path}"
 	else
-    mv "${csv_name}" "${xls_path}/error_code_${exit_message}_$(basename "${csv_name}")"
+    mv "${csv_name}" "${xls_path}/error_${exit_message}_$(basename "${csv_name}")"
 	fi
 
 done
