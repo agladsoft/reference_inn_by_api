@@ -1,4 +1,3 @@
-import sqlite3
 import xml.etree.ElementTree as ET
 from requests_html import HTMLSession
 from bs4 import BeautifulSoup
@@ -27,7 +26,8 @@ class InnApi:
             page_many_company = html.findAll("div", attrs={"class": "company-item"})
             for inn, inn_name in zip(page_many_inn, page_many_company):
                 if not page_inn and not page_name and inn.text == value:
-                    var_api_name = inn_name.find("span", {"class", "finded-text"}).parent.parent.parent.parent.find("a").text.strip()
+                    var_api_name = inn_name.find("span", {"class", "finded-text"}).parent.parent.parent.parent.find(
+                        "a").text.strip()
                     var_api_name = re.sub(" +", " ", var_api_name)
                     break
             if page_name:
@@ -51,9 +51,10 @@ class InnApi:
         self.get_inn_from_site(list_inn, inn_text, count_inn)
         self.get_inn_from_site(list_inn, inn_title, count_inn)
 
-    def get_inn_by_yandex(self, value):
+    def get_inn_by_yandex(self, value, index):
         session = HTMLSession()
-        r = session.get(f"https://xmlriver.com/search_yandex/xml?user=6390&key=e3b3ac2908b2a9e729f1671218c85e12cfe643b0&query={value} ИНН")
+        r = session.get(
+            f"https://xmlriver.com/search_yandex/xml?user=6390&key=e3b3ac2908b2a9e729f1671218c85e12cfe643b0&query={value} ИНН")
         xml_code = r.html.html
         myroot = ET.fromstring(xml_code)
         index_page = 2 if myroot[0][1].tag == 'correct' else 1
@@ -64,8 +65,10 @@ class InnApi:
             try:
                 self.get_inn_from_html(myroot, index_page, results, list_inn, count_inn)
             except Exception as ex:
-                logger.info(f'Error {ex}: the description is not string - {value}')
-                logger_stream.info(f'Error {ex}: the description is not string - {value}')
+                logger.warning(
+                    f"Warning: description {value} not found in the Yandex. Index is {index}. Exception - {ex}")
+                logger_stream.warning(f"Warning: description {value} not found in the Yandex. Index is {index}. "
+                                      f"Exception - {ex}")
                 continue
         return max(list_inn, key=list_inn.get) if list_inn else "empty"
 
@@ -78,10 +81,9 @@ class InnApi:
         self.conn.commit()
         return cur
 
-    def get_inn(self, inn):
+    def get_inn(self, inn, index):
         rows = self.cur.execute(f"SELECT * FROM {self.table_name} WHERE key = {inn}")
         if rows := list(rows):
-            print(f"Данные есть в кэше: ИНН - {rows[0][0]}, Наименование - {rows[0][1]}")
             return rows[0][0], rows[0][1]
         for key in [inn]:
             api_inn, api_name = None, None
@@ -91,20 +93,22 @@ class InnApi:
                 elif len(key) == 12:
                     api_inn, api_name = self.get_inn_by_api(key, 'req_inn')
             if api_inn is not None and api_name is not None:
-                print(self.cache_add_and_save(api_inn, api_name))
+                self.cache_add_and_save(api_inn, api_name)
                 break
             else:
-                logger.error(f"Error: INN not found in rusprofile {api_inn} - {api_name}")
-                logger_stream.error(f"Error INN not found in rusprofile {api_inn} - {api_name}")
+                logger.error(f"Error: not found inn {api_inn} in rusprofile. Index is {index}. Unified company name is "
+                             f"{api_name}")
+                logger_stream.error(f"Error: not found inn {api_inn} in rusprofile. Index is {index}."
+                                    f" Unified company name is {api_name}")
         return api_inn, api_name
 
-    def get_inn_from_value(self, value):
+    def get_inn_from_value(self, value, index):
         rows = self.cur.execute('SELECT * FROM "{}" WHERE key=?'.format(self.table_name.replace('"', '""')), (value,))
         rows = list(rows)
         if rows and rows[0][1] != "empty":
             return rows[0][1], rows[0][0]
         for key in [value]:
-            api_inn = self.get_inn_by_yandex(key)
+            api_inn = self.get_inn_by_yandex(key, index)
             with contextlib.suppress(Exception):
                 if rows[0][1] == 'empty':
                     sql_update_query = f"""Update {self.table_name} set value = ? where key = ?"""
@@ -118,10 +122,3 @@ class InnApi:
         self.cur.executemany(f"INSERT or IGNORE INTO {self.table_name} VALUES(?, ?)", [(api_inn, api_name)])
         self.conn.commit()
         return "Данные записываются в кэш", api_inn, api_name
-
-
-if __name__ == "__main__":
-    conn = sqlite3.connect("cache_inn.db")
-    get_inn_api = InnApi("inn_and_uni_company_name", conn)
-    # print(get_inn_api.get_inn("781310635186"))
-    print(get_inn_api.get_inn("1658008723"))

@@ -7,9 +7,9 @@ import validate_inn
 import pandas as pd
 from __init__ import *
 from pathlib import Path
+from cache import InnApi
 from fuzzywuzzy import fuzz
 from pandas import DataFrame
-from cache_inn import InnApi
 from typing import List, Tuple
 from sqlite3 import Connection
 from multiprocessing import Pool
@@ -45,7 +45,7 @@ def compare_different_fuzz(company_name: str, translated: str, fuzz_company_name
     return max(fuzz_company_name, fuzz_company_name_two)
 
 
-def get_company_name_by_inn(provider: InnApi, data: dict, inn: list, sentence: str,
+def get_company_name_by_inn(provider: InnApi, data: dict, inn: list, sentence: str, index: int,
                             translated: str = None, cache_name_inn: InnApi = None) -> None:
     """
     We get a unified company name from the sentence itself for the found INN. And then we are looking for a company
@@ -55,9 +55,9 @@ def get_company_name_by_inn(provider: InnApi, data: dict, inn: list, sentence: s
         translated: str = GoogleTranslator(source='en', target='ru').translate(sentence)
     data['is_inn_found_auto'] = True
     data['company_name_rus'] = translated
-    if inn == 'empty':
-        inn, translated = get_company_name_by_sentence(cache_name_inn, translated, is_english=True)
-    inn, company_name = provider.get_inn(inn)
+    # if inn == 'empty':
+    #     inn, translated = get_company_name_by_sentence(cache_name_inn, translated, is_english=True)
+    inn, company_name = provider.get_inn(inn, index)
     data["company_inn"] = inn
     company_name: str = re.sub(" +", " ", company_name)
     data["company_name_unified"] = company_name
@@ -67,7 +67,8 @@ def get_company_name_by_inn(provider: InnApi, data: dict, inn: list, sentence: s
     data['confidence_rate'] = fuzz_company_name
 
 
-def get_company_name_by_sentence(provider: InnApi, sentence: str, is_english: bool = False) -> Tuple[str, str]:
+def get_company_name_by_sentence(provider: InnApi, sentence: str, index: int, is_english: bool = False) \
+        -> Tuple[str, str]:
     """
     We send the sentence to the Yandex search engine (first we pre-process: translate it into Russian) by the link
     https://xmlriver.com/search_yandex/xml?user=6390&key=e3b3ac2908b2a9e729f1671218c85e12cfe643b0&query=<value> INN
@@ -75,30 +76,30 @@ def get_company_name_by_sentence(provider: InnApi, sentence: str, is_english: bo
     sentence: str = sentence.translate({ord(c): " " for c in r".,!@#$%^&*()[]{};?\|~=_+"})
     if is_english:
         sentence = sentence.replace('"', "")
-        inn, translated = provider.get_inn_from_value(sentence)
+        inn, translated = provider.get_inn_from_value(sentence, index)
         return inn, translated
     sentence = replace_quotes(sentence, replaced_str=' ')
     sentence = re.sub(" +", " ", sentence).strip()
     translated: str = GoogleTranslator(source='en', target='ru').translate(sentence)
     translated = replace_quotes(translated, quotes=['"', '«', '»'], replaced_str=' ')
     translated = re.sub(" +", " ", translated).strip()
-    inn, translated = provider.get_inn_from_value(translated)
+    inn, translated = provider.get_inn_from_value(translated, index)
     return inn, translated
 
 
-def find_international_company(cache_inn: InnApi, sentence: str, data: dict) -> None:
+def find_international_company(cache_inn: InnApi, sentence: str, data: dict, index: int) -> None:
     """
     Search for international companies.
     """
     for country_and_city in countries_and_cities:
         if re.findall(country_and_city, sentence.upper()) and not re.findall("RUSSIA", sentence.upper()):
             data["is_company_name_international"] = True
-            get_company_name_by_inn(cache_inn, data, inn=[], sentence=sentence)
+            get_company_name_by_inn(cache_inn, data, inn=[], sentence=sentence, index=index)
     if not data["is_company_name_international"]:
         data["is_company_name_international"] = False
 
 
-def get_inn_from_row(sentence: str, data: dict) -> None:
+def get_inn_from_row(sentence: str, data: dict, index: int) -> None:
     """
     Full processing of the sentence, including 1). inn search by offer -> company search by inn,
     2). inn search in yandex by request -> company search by inn.
@@ -110,13 +111,14 @@ def get_inn_from_row(sentence: str, data: dict) -> None:
         with contextlib.suppress(Exception):
             item_inn2 = validate_inn.validate(item_inn)
             list_inn.append(item_inn2)
-    # find_international_company(cache_inn, sentence, data)
+    # find_international_company(cache_inn, sentence, data, index)
     if list_inn:
-        get_company_name_by_inn(cache_inn, data, inn=list_inn[0], sentence=sentence)
+        get_company_name_by_inn(cache_inn, data, inn=list_inn[0], sentence=sentence, index=index)
     else:
         cache_name_inn: InnApi = InnApi("company_name_and_inn", conn)
-        inn, translated = get_company_name_by_sentence(cache_name_inn, sentence)
-        get_company_name_by_inn(cache_inn, data, inn, sentence, translated=translated, cache_name_inn=cache_name_inn)
+        inn, translated = get_company_name_by_sentence(cache_name_inn, sentence, index)
+        get_company_name_by_inn(cache_inn, data, inn, sentence, translated=translated, cache_name_inn=cache_name_inn,
+                                index=index)
 
 
 def write_to_json(index: int, data: dict) -> None:
@@ -138,10 +140,12 @@ def parse_data(index: int, data: dict) -> None:
     for key, sentence in data.items():
         try:
             if key == 'company_name':
-                get_inn_from_row(sentence, data)
+                get_inn_from_row(sentence, data, index)
         except Exception as ex:
-            logger.info(f'Error in inn {ex}: {index} data is {data}')
-            logger_stream.info(f'Error in inn {ex}: {index} data is {data}')
+            logger.error(f'Error: not found inn in Yandex {index, sentence} (most likely a foreign company). '
+                         f'Exception - {ex}')
+            logger_stream.error(f'Error: not found inn in Yandex {index, sentence} (most likely a foreign company). '
+                                f'Exception - {ex}')
     write_to_json(index, data)
 
 
