@@ -69,10 +69,16 @@ class InnApi:
                 logger.error(error_message)
                 logger_stream.error(f"нет_свободных_каналов_на_строке_{index}")
                 raise AttributeError(error_message)
-            else:
-                error_message = f"Error: not found code error. Index is {index}. Exception - {error_code.text}"
+            elif error_code.attrib['code'] == '15':
+                error_message = f"No results found in the search engine. Index is {index}. " \
+                                f"Exception - {error_code.text}"
                 logger.error(error_message)
-                logger_stream.error(f"необработанная_ошибка_{index}")
+                logger_stream.error(f"не_найдено_результатов_{index}")
+            else:
+                error_message = f"Error: not found code error {error_code.attrib['code']}. Index is {index}. " \
+                                f"Exception - {error_code.text}"
+                logger.error(error_message)
+                logger_stream.error(f"необработанная_ошибка_на_строке_{index}")
                 raise AssertionError(error_message)
 
     def get_inn_by_yandex(self, value, index, is_var):
