@@ -1,9 +1,8 @@
 import re
 import sys
+import time
 import sqlite3
 import contextlib
-import time
-
 import numpy as np
 import validate_inn
 import pandas as pd
@@ -16,7 +15,7 @@ from typing import List, Tuple
 from sqlite3 import Connection
 from multiprocessing import Pool
 from pandas.io.parsers import TextFileReader
-from deep_translator import GoogleTranslator
+from deep_translator import GoogleTranslator, exceptions
 
 
 def replace_forms_organizations(company_name: str) -> str:
@@ -148,6 +147,11 @@ def parse_data(index: int, data: dict, is_var) -> None:
                          f'Exception - {ex}')
             logger_stream.error(f'Error: not found inn in Yandex {index, sentence} (most likely a foreign company). '
                                 f'Exception - {ex}')
+        except exceptions.TooManyRequests as ex_translator:
+            error_message = f'Error: too many requests to the translator. Exception - {ex_translator}'
+            logger.error(error_message)
+            logger_stream.error(f'много_запросов_к_переводчику_на_строке_{index}')
+            raise AssertionError(error_message) from ex_translator
     write_to_json(index, data)
 
 
