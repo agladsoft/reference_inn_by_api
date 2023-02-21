@@ -46,7 +46,7 @@ def compare_different_fuzz(company_name: str, translated: str, fuzz_company_name
 
 
 def get_company_name_by_inn(provider: InnApi, data: dict, inn: list, sentence: str, index: int,
-                            translated: str = None, cache_name_inn: InnApi = None) -> None:
+                            translated: str = None) -> None:
     """
     We get a unified company name from the sentence itself for the found INN. And then we are looking for a company
     on the website https://www.rusprofile.ru/.
@@ -55,8 +55,6 @@ def get_company_name_by_inn(provider: InnApi, data: dict, inn: list, sentence: s
         translated: str = GoogleTranslator(source='en', target='ru').translate(sentence)
     data['is_inn_found_auto'] = True
     data['company_name_rus'] = translated
-    # if inn == 'empty':
-    #     inn, translated = get_company_name_by_sentence(cache_name_inn, translated, is_english=True)
     inn, company_name = provider.get_inn(inn, index)
     data["company_inn"] = inn
     company_name: str = re.sub(" +", " ", company_name)
@@ -112,13 +110,14 @@ def get_inn_from_row(sentence: str, data: dict, index: int) -> None:
             item_inn2 = validate_inn.validate(item_inn)
             list_inn.append(item_inn2)
     # find_international_company(cache_inn, sentence, data, index)
+    data['original_file_name'] = os.path.basename(sys.argv[1])
+    data['original_file_parsed_on'] = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     if list_inn:
         get_company_name_by_inn(cache_inn, data, inn=list_inn[0], sentence=sentence, index=index)
     else:
         cache_name_inn: InnApi = InnApi("company_name_and_inn", conn)
         inn, translated = get_company_name_by_sentence(cache_name_inn, sentence, index)
-        get_company_name_by_inn(cache_inn, data, inn, sentence, translated=translated, cache_name_inn=cache_name_inn,
-                                index=index)
+        get_company_name_by_inn(cache_inn, data, inn, sentence, translated=translated, index=index)
 
 
 def write_to_json(index: int, data: dict) -> None:
@@ -184,6 +183,8 @@ def convert_csv_to_dict(filename: str) -> List[dict]:
     dataframe['company_inn'] = None
     dataframe['company_name_unified'] = None
     dataframe['is_inn_found_auto'] = None
+    dataframe['original_file_name'] = None
+    dataframe['original_file_parsed_on'] = None
     # dataframe["is_company_name_international"] = None
     dataframe['confidence_rate'] = None
     return dataframe.to_dict('records')
@@ -202,7 +203,9 @@ if __name__ == "__main__":
     pool.join()
     if not terminated:
         for r in results:
-            r.get()
+            with contextlib.suppress(Exception):
+                r.get()
     else:
+        conn.close()
         sys.exit(1)
     conn.close()
