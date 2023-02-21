@@ -2,6 +2,8 @@ import re
 import sys
 import sqlite3
 import contextlib
+import time
+
 import numpy as np
 import validate_inn
 import pandas as pd
@@ -65,7 +67,7 @@ def get_company_name_by_inn(provider: InnApi, data: dict, inn: list, sentence: s
     data['confidence_rate'] = fuzz_company_name
 
 
-def get_company_name_by_sentence(provider: InnApi, sentence: str, index: int, is_english: bool = False) \
+def get_company_name_by_sentence(provider: InnApi, sentence: str, index: int, is_var, is_english: bool = False) \
         -> Tuple[str, str]:
     """
     We send the sentence to the Yandex search engine (first we pre-process: translate it into Russian) by the link
@@ -74,14 +76,14 @@ def get_company_name_by_sentence(provider: InnApi, sentence: str, index: int, is
     sentence: str = sentence.translate({ord(c): " " for c in r".,!@#$%^&*()[]{};?\|~=_+"})
     if is_english:
         sentence = sentence.replace('"', "")
-        inn, translated = provider.get_inn_from_value(sentence, index)
+        inn, translated = provider.get_inn_from_value(sentence, index, is_var)
         return inn, translated
     sentence = replace_quotes(sentence, replaced_str=' ')
     sentence = re.sub(" +", " ", sentence).strip()
     translated: str = GoogleTranslator(source='en', target='ru').translate(sentence)
     translated = replace_quotes(translated, quotes=['"', '«', '»'], replaced_str=' ')
     translated = re.sub(" +", " ", translated).strip()
-    inn, translated = provider.get_inn_from_value(translated, index)
+    inn, translated = provider.get_inn_from_value(translated, index, is_var)
     return inn, translated
 
 
@@ -97,7 +99,7 @@ def find_international_company(cache_inn: InnApi, sentence: str, data: dict, ind
         data["is_company_name_international"] = False
 
 
-def get_inn_from_row(sentence: str, data: dict, index: int) -> None:
+def get_inn_from_row(sentence: str, data: dict, index: int, is_var) -> None:
     """
     Full processing of the sentence, including 1). inn search by offer -> company search by inn,
     2). inn search in yandex by request -> company search by inn.
@@ -116,7 +118,7 @@ def get_inn_from_row(sentence: str, data: dict, index: int) -> None:
         get_company_name_by_inn(cache_inn, data, inn=list_inn[0], sentence=sentence, index=index)
     else:
         cache_name_inn: InnApi = InnApi("company_name_and_inn", conn)
-        inn, translated = get_company_name_by_sentence(cache_name_inn, sentence, index)
+        inn, translated = get_company_name_by_sentence(cache_name_inn, sentence, index, is_var)
         get_company_name_by_inn(cache_inn, data, inn, sentence, translated=translated, index=index)
 
 
@@ -132,14 +134,15 @@ def write_to_json(index: int, data: dict) -> None:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 
-def parse_data(index: int, data: dict) -> None:
+def parse_data(index: int, data: dict, is_var) -> None:
     """
     Processing each row.
     """
+    print(f"is_var - {is_var}")
     for key, sentence in data.items():
         try:
             if key == 'company_name':
-                get_inn_from_row(sentence, data, index)
+                get_inn_from_row(sentence, data, index, is_var)
         except (IndexError, ValueError, TypeError) as ex:
             logger.error(f'Error: not found inn in Yandex {index, sentence} (most likely a foreign company). '
                          f'Exception - {ex}')
@@ -152,10 +155,12 @@ def terminate_processors(e):
     """
     Interrupt all processors in case of an error.
     """
+    global terminated
     if type(e) is AssertionError:
-        global terminated
         terminated = True
         pool.terminate()
+    elif type(e) is AttributeError:
+        terminated = None
 
 
 def create_file_for_cache() -> str:
@@ -190,21 +195,46 @@ def convert_csv_to_dict(filename: str) -> List[dict]:
     return dataframe.to_dict('records')
 
 
+def get_result(results_list) -> None:
+    """
+    Return every result that comes.
+    """
+    for result in results_list:
+        with contextlib.suppress(Exception):
+            result.get()
+
+
+def get_pool_processors(data: list, is_var) -> Tuple[Pool, list]:
+    """
+    Get a list of results.
+    """
+    global pool
+    pool = Pool(processes=worker_count)
+    _results: list = [pool.apply_async(parse_data, (i, dict_data, is_var), error_callback=terminate_processors)
+                      for i, dict_data in enumerate(data, 2)]
+    pool.close()
+    pool.join()
+    return pool, _results
+
+
 if __name__ == "__main__":
+    pool: Pool
     procs: list = []
     path: str = create_file_for_cache()
     terminated: bool = False
     conn: Connection = sqlite3.connect(path)
     parsed_data: List[dict] = convert_csv_to_dict(os.path.abspath(sys.argv[1]))
-    pool: Pool() = Pool(processes=worker_count)
-    results: list = [pool.apply_async(parse_data, (i, dict_data), error_callback=terminate_processors)
-                     for i, dict_data in enumerate(parsed_data, 2)]
-    pool.close()
-    pool.join()
-    if not terminated:
-        for r in results:
-            with contextlib.suppress(Exception):
-                r.get()
+    is_var = True
+    pool, results = get_pool_processors(parsed_data, is_var)
+    if terminated is None:
+        for _result in results:
+            _result.wait()
+            time.sleep(2)
+            is_var = False
+            pool, results = get_pool_processors(parsed_data, is_var)
+            get_result(results)
+    elif not terminated:
+        get_result(results)
     else:
         conn.close()
         sys.exit(1)
