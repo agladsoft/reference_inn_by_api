@@ -64,7 +64,6 @@ class InnApi:
         logger_stream.error(f"{prefix}")
 
     def get_code_error(self, error_code: ET, index: int, value: str) -> None:
-        error_code.tag = 'error'
         if error_code.tag == 'error':
             code = error_code.attrib.get('code')
             message = MESSAGE_TEMPLATE.get(code,
