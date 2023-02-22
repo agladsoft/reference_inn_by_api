@@ -16,7 +16,7 @@ from typing import List, Tuple, Any
 from multiprocessing import Pool, Queue
 from pandas.io.parsers import TextFileReader
 from deep_translator import GoogleTranslator, exceptions
-from cache2 import LegalEntitiesParser, SearchEngineParser, MyError
+from inn_api import LegalEntitiesParser, SearchEngineParser, MyError
 
 
 class ReferenceInn(object):
@@ -54,7 +54,7 @@ class ReferenceInn(object):
         fuzz_company_name_two: int = fuzz.partial_ratio(company_name_en.upper(), translated.upper())
         return max(fuzz_company_name, fuzz_company_name_two)
 
-    def get_company_name_by_inn(self, provider: LegalEntitiesParser, data: dict, inn: list, sentence: str, index: int,
+    def get_company_name_by_inn(self, provider: LegalEntitiesParser, data: dict, inn: str, sentence: str, index: int,
                                 translated: str = None) -> None:
         """
         We get a unified company name from the sentence itself for the found INN. And then we are looking for a company
@@ -64,7 +64,7 @@ class ReferenceInn(object):
             translated: str = GoogleTranslator(source='en', target='ru').translate(sentence)
         data['is_inn_found_auto'] = True
         data['company_name_rus'] = translated
-        inn, company_name = provider.get_inn(inn, index)
+        inn, company_name = provider.get_inn_from_cache(inn, index)
         data["company_inn"] = inn
         company_name: str = re.sub(" +", " ", company_name)
         data["company_name_unified"] = company_name
@@ -83,14 +83,14 @@ class ReferenceInn(object):
         sentence: str = sentence.translate({ord(c): " " for c in r".,!@#$%^&*()[]{};?\|~=_+"})
         if is_english:
             sentence = sentence.replace('"', "")
-            inn, translated = provider.get_inn_from_sentence(sentence, index)
+            inn, translated = provider.get_inn_from_cache(sentence, index)
             return inn, translated
         sentence = self.replace_quotes(sentence, replaced_str=' ')
         sentence = re.sub(" +", " ", sentence).strip() + sign
         translated: str = GoogleTranslator(source='en', target='ru').translate(sentence)
         translated = self.replace_quotes(translated, quotes=['"', '«', '»', sign], replaced_str=' ')
         translated = re.sub(" +", " ", translated).strip()
-        inn, translated = provider.get_inn_from_sentence(translated, index)
+        inn, translated = provider.get_inn_from_cache(translated, index)
         return inn, translated
 
     def find_international_company(self, cache_inn: LegalEntitiesParser, sentence: str, data: dict, index: int) -> None:
@@ -100,7 +100,7 @@ class ReferenceInn(object):
         for country_and_city in COUNTRIES_AND_CITIES:
             if re.findall(country_and_city, sentence.upper()) and not re.findall("RUSSIA", sentence.upper()):
                 data["is_company_name_international"] = True
-                self.get_company_name_by_inn(cache_inn, data, inn=[], sentence=sentence, index=index)
+                self.get_company_name_by_inn(cache_inn, data, inn='None', sentence=sentence, index=index)
         if not data["is_company_name_international"]:
             data["is_company_name_international"] = False
 
@@ -110,9 +110,9 @@ class ReferenceInn(object):
         2). inn search in yandex by request -> company search by inn.
         """
         list_inn: list = []
-        inn: list = re.findall(r"\d+", sentence)
+        all_list_inn: list = re.findall(r"\d+", sentence)
         cache_inn: LegalEntitiesParser = LegalEntitiesParser("inn_and_uni_company_name", conn)
-        for item_inn in inn:
+        for item_inn in all_list_inn:
             with contextlib.suppress(Exception):
                 item_inn2 = validate_inn.validate(item_inn)
                 list_inn.append(item_inn2)
@@ -223,4 +223,5 @@ if __name__ == "__main__":
                     _pool.apply_async(reference_inn.parse_data, (index_queue, parsed_data[index_queue - 2]))
                 _pool.close()
                 _pool.join()
+
     conn.close()

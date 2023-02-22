@@ -54,7 +54,7 @@ do
 	fi
 
 	# Will convert csv to json
-	exit_message=$(python3 ${XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS}/scripts_for_bash_with_inheritance/reference_inn_by_api.py "${csv_name}" "${json_path}" 2>&1 > /dev/null)
+	exit_message=$(python3 ${XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS}/scripts/main.py "${csv_name}" "${json_path}" 2>&1 > /dev/null)
 
   exit_code=$?
   echo "Exit code ${exit_code}"

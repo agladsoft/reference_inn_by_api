@@ -2,5 +2,5 @@
 .vscode
 logging
 cache_inn
-scripts_for_bash_with_inheritance/None
-scripts_for_bash_with_inheritance/__pychache__
+scripts/None
+scripts/__pychache__

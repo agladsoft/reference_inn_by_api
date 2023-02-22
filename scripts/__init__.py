@@ -46,7 +46,7 @@ if logger.hasHandlers():
     logger.handlers.clear()
 logger.addHandler(json_handler)
 logger.setLevel(logging.INFO)
-logger.info(f'{datetime.datetime.now()}')
+logger.info(f'{os.path.basename(__file__)} {datetime.datetime.now()}')
 
 console_out: logging.StreamHandler = logging.StreamHandler()
 logger_stream: logging.getLogger = logging.getLogger("stream")

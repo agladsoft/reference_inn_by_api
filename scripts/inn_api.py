@@ -1,10 +1,12 @@
 import re
+import sqlite3
 import contextlib
 import validate_inn
-from typing import Union
-from bs4 import BeautifulSoup
+from requests import Response
+from typing import Union, Tuple
 from requests_html import HTMLSession
 import xml.etree.ElementTree as ElemTree
+from bs4 import BeautifulSoup, Tag, ResultSet
 from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE
 
 
@@ -18,14 +20,14 @@ class MyError(Exception):
 class LegalEntitiesParser(object):
     def __init__(self, table_name, conn):
         self.table_name: str = table_name
-        self.conn = conn
-        self.cur = self.load_cache()
+        self.conn: sqlite3.Connection = conn
+        self.cur: sqlite3.Cursor = self.load_cache()
 
-    def load_cache(self):
+    def load_cache(self) -> sqlite3.Cursor:
         """
-
+        Loading the cache.
         """
-        cur = self.conn.cursor()
+        cur: sqlite3.Cursor = self.conn.cursor()
         cur.execute(f"""CREATE TABLE IF NOT EXISTS {self.table_name}(
            key TEXT PRIMARY KEY,
            value TEXT)
@@ -33,32 +35,32 @@ class LegalEntitiesParser(object):
         self.conn.commit()
         return cur
 
-    def cache_add_and_save(self, api_inn, api_name):
+    def cache_add_and_save(self, api_inn: str, api_name: str) -> Tuple[str, str, str]:
         """
-
+        Saving and adding the result to the cache.
         """
         self.cur.executemany(f"INSERT or IGNORE INTO {self.table_name} VALUES(?, ?)", [(api_inn, api_name)])
         self.conn.commit()
         return "Данные записываются в кэш", api_inn, api_name
 
     @staticmethod
-    def get_inn_by_api(value, _id, var_api_name=None):
+    def get_inn_by_api(value: str, _id: str, var_api_name: str = None) -> Union[Tuple[Union[str, None], str]]:
         """
-
+        Looking for a company name unified from the website of legal entities.
         """
         try:
-            session = HTMLSession()
-            api_inn = session.get(f'https://www.rusprofile.ru/search?query={value}')
-            html_code = api_inn.html.html
-            html = BeautifulSoup(html_code, 'html.parser')
-            page_inn = html.find('span', attrs={'id': _id})
-            page_name = html.find('h1', attrs={'itemprop': 'name'})
-            page_many_inn = html.findAll('span', attrs={'class': 'finded-text'})
-            page_many_company = html.findAll("div", attrs={"class": "company-item"})
+            session: HTMLSession = HTMLSession()
+            api_inn: Response = session.get(f'https://www.rusprofile.ru/search?query={value}')
+            html_code: str = api_inn.html.html
+            html: BeautifulSoup = BeautifulSoup(html_code, 'html.parser')
+            page_inn: Tag = html.find('span', attrs={'id': _id})
+            page_name: Tag = html.find('h1', attrs={'itemprop': 'name'})
+            page_many_inn: ResultSet = html.findAll('span', attrs={'class': 'finded-text'})
+            page_many_company: ResultSet = html.findAll("div", attrs={"class": "company-item"})
             for inn, inn_name in zip(page_many_inn, page_many_company):
                 if not page_inn and not page_name and inn.text == value:
-                    var_api_name = inn_name.find("span", {"class", "finded-text"}).parent.parent.parent.parent.find(
-                        "a").text.strip()
+                    var_api_name: str = inn_name.find("span", {"class", "finded-text"}).parent.parent.parent.parent.\
+                        find("a").text.strip()
                     var_api_name = re.sub(" +", " ", var_api_name)
                     break
             if page_name:
@@ -67,13 +69,16 @@ class LegalEntitiesParser(object):
         except (IndexError, ValueError, TypeError):
             return value if value != 'None' else None, var_api_name
 
-    def get_inn(self, inn, index):
+    def get_inn_from_cache(self, inn: str, index: int) -> Tuple[Union[str, None], Union[str, None]]:
         """
-
+        Getting the company name unified from the cache, if there is one.
+        Otherwise, we are looking for verification of legal entities on websites.
         """
-        rows = self.cur.execute(f"SELECT * FROM {self.table_name} WHERE key = {inn}")
-        if rows := list(rows):
-            return rows[0][0], rows[0][1]
+        api_inn: Union[str, None]
+        api_name: Union[str, None]
+        rows: sqlite3.Cursor = self.cur.execute(f"SELECT * FROM {self.table_name} WHERE key = {inn}")
+        if list_rows := list(rows):
+            return list_rows[0][0], list_rows[0][1]
         for key in [inn]:
             api_inn, api_name = None, None
             if key != 'None':
@@ -97,35 +102,36 @@ class SearchEngineParser(LegalEntitiesParser):
     @staticmethod
     def log_error(prefix: str, message: str) -> None:
         """
-
+        Recording logs.
         """
         logger.error(message)
         logger_stream.error(f"{prefix}")
 
     @staticmethod
-    def get_inn_from_site(list_inn, values, count_inn):
+    def get_inn_from_site(dict_inn: dict, values: list, count_inn: int) -> None:
         """
-
+        Parse each site (description and title).
         """
         for item_inn in values:
             with contextlib.suppress(Exception):
-                inn = validate_inn.validate(item_inn)
-                list_inn[inn] = list_inn[inn] + 1 if inn in list_inn else count_inn
+                inn: str = validate_inn.validate(item_inn)
+                dict_inn[inn] = dict_inn[inn] + 1 if inn in dict_inn else count_inn
 
-    def get_inn_from_html(self, myroot, index_page, results, list_inn, count_inn):
+    def get_inn_from_html(self, myroot: ElemTree, index_page: int, results: int, dict_inn: dict, count_inn: int) \
+            -> None:
         """
-
+        Parsing the html page of the search engine with the found queries.
         """
-        value = myroot[0][index_page][0][results][1][3][0].text
-        title = myroot[0][index_page][0][results][1][1].text
-        inn_text = re.findall(r"\d+", value)
-        inn_title = re.findall(r"\d+", title)
-        self.get_inn_from_site(list_inn, inn_text, count_inn)
-        self.get_inn_from_site(list_inn, inn_title, count_inn)
+        value: str = myroot[0][index_page][0][results][1][3][0].text
+        title: str = myroot[0][index_page][0][results][1][1].text
+        inn_text: list = re.findall(r"\d+", value)
+        inn_title: list = re.findall(r"\d+", title)
+        self.get_inn_from_site(dict_inn, inn_text, count_inn)
+        self.get_inn_from_site(dict_inn, inn_title, count_inn)
 
     def get_code_error(self, error_code: ElemTree, index: int, value: str) -> None:
         """
-
+        Getting error codes from xml_river.
         """
         if error_code.tag == 'error':
             code: Union[str, None] = error_code.attrib.get('code')
@@ -139,46 +145,46 @@ class SearchEngineParser(LegalEntitiesParser):
             elif code == '110' or code != '15':
                 raise MyError(message, value, index)
 
-    def get_inn_from_search_engine(self, value, index):
+    def get_inn_from_search_engine(self, value: str, index: int) -> str:
         """
-
+        Looking for the INN in the search engine, and then we parse through the sites.
         """
-        session = HTMLSession()
-        r = session.get(f"https://xmlriver.com/search_yandex/xml?user={USER_XML_RIVER}&key={KEY_XML_RIVER}"
-                        f"&query={value} ИНН")
-        xml_code = r.html.html
-        myroot = ElemTree.fromstring(xml_code)
+        session: HTMLSession = HTMLSession()
+        r: Response = session.get(f"https://xmlriver.com/search_yandex/xml?user={USER_XML_RIVER}&key={KEY_XML_RIVER}"
+                                  f"&query={value} ИНН")
+        xml_code: str = r.html.html
+        myroot: ElemTree = ElemTree.fromstring(xml_code)
         self.get_code_error(myroot[0][0], index, value)
-        index_page = 2 if myroot[0][1].tag == 'correct' else 1
-        last_range = int(myroot[0][index_page][0][0].attrib['last'])
-        list_inn = {}
-        count_inn = 0
+        index_page: int = 2 if myroot[0][1].tag == 'correct' else 1
+        last_range: int = int(myroot[0][index_page][0][0].attrib['last'])
+        dict_inn: dict = {}
+        count_inn: int = 0
         for results in range(1, last_range):
             try:
-                self.get_inn_from_html(myroot, index_page, results, list_inn, count_inn)
+                self.get_inn_from_html(myroot, index_page, results, dict_inn, count_inn)
             except Exception as ex:
                 logger.warning(
                     f"Warning: description {value} not found in the Yandex. Index is {index}. Exception - {ex}")
                 logger_stream.warning(f"Warning: description {value} not found in the Yandex. Index is {index}. "
                                       f"Exception - {ex}")
-        return max(list_inn, key=list_inn.get) if list_inn else "None"
+        return max(dict_inn, key=dict_inn.get) if dict_inn else "None"
 
-    def get_inn_from_sentence(self, value, index):
+    def get_inn_from_cache(self, value: str, index: int) -> Tuple[str, str]:
         """
-
+        Getting the INN from the cache, if there is one. Otherwise, we search in the search engine.
         """
-        rows = self.cur.execute(
+        rows: sqlite3.Cursor = self.cur.execute(
             f"""SELECT * FROM "{self.table_name.replace('"', '""')}" WHERE key=?""", (value,),
         )
-        rows = list(rows)
-        if rows and rows[0][1] != "None":
-            return rows[0][1], rows[0][0]
+        list_rows: list = list(rows)
+        if list_rows and list_rows[0][1] != "None":
+            return list_rows[0][1], list_rows[0][0]
         for key in [value]:
-            api_inn = self.get_inn_from_search_engine(key, index)
+            api_inn: str = self.get_inn_from_search_engine(key, index)
             with contextlib.suppress(Exception):
-                if rows[0][1] == 'None':
-                    sql_update_query = f"""Update {self.table_name} set value = ? where key = ?"""
-                    data = (api_inn, value)
+                if list_rows[0][1] == 'None':
+                    sql_update_query: str = f"""Update {self.table_name} set value = ? where key = ?"""
+                    data: tuple[str, str] = (api_inn, value)
                     self.cur.execute(sql_update_query, data)
                     self.conn.commit()
             self.cache_add_and_save(value, api_inn)
