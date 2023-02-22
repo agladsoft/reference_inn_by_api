@@ -1,6 +1,7 @@
 import re
 import contextlib
 import validate_inn
+from typing import Union
 from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
 from requests_html import HTMLSession
@@ -65,11 +66,11 @@ class InnApi:
 
     def get_code_error(self, error_code: ET, index: int, value: str) -> None:
         if error_code.tag == 'error':
-            code = error_code.attrib.get('code')
-            message = MESSAGE_TEMPLATE.get(code,
-                                           "Error: not found code error {}. Index is {}. Exception - {}. Value - {}")
+            code: Union[str, None] = error_code.attrib.get('code')
+            message: str = MESSAGE_TEMPLATE.get(code, "Error: not found code error {}. Index is {}. Exception - {}. "
+                                                      "Value - {}")
             message = message.format(index, error_code.text, value, code)
-            prefix = PREFIX_TEMPLATE.get(code, "необработанная_ошибка_на_строке_")
+            prefix: str = PREFIX_TEMPLATE.get(code, "необработанная_ошибка_на_строке_")
             self.log_error(prefix + str(index), message)
             if code == '200':
                 raise AssertionError(message)
