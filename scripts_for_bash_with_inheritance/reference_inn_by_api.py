@@ -1,6 +1,5 @@
 import re
 import sys
-import time
 import sqlite3
 import contextlib
 import numpy as np
@@ -8,12 +7,12 @@ import validate_inn
 import pandas as pd
 from __init__ import *
 from pathlib import Path
-from cache import InnApi
 from fuzzywuzzy import fuzz
 from pandas import DataFrame
 from typing import List, Tuple
 from sqlite3 import Connection
-from multiprocessing import Pool
+from cache import InnApi, MyErrror
+from multiprocessing import Pool, Queue
 from pandas.io.parsers import TextFileReader
 from deep_translator import GoogleTranslator, exceptions
 
@@ -142,7 +141,7 @@ def parse_data(index: int, data: dict, is_var) -> None:
         try:
             if key == 'company_name':
                 get_inn_from_row(sentence, data, index, is_var)
-        except (IndexError, ValueError, TypeError) as ex:
+        except (IndexError, ValueError, TypeError, sqlite3.OperationalError) as ex:
             logger.error(f'Error: not found inn in Yandex {index, sentence} (most likely a foreign company). '
                          f'Exception - {ex}')
             logger_stream.error(f'Error: not found inn in Yandex {index, sentence} (most likely a foreign company). '
@@ -163,8 +162,14 @@ def terminate_processors(e):
     if type(e) is AssertionError:
         terminated = True
         pool.terminate()
-    elif type(e) is AttributeError:
-        terminated = None
+    elif type(e) is MyErrror:
+        value = e.value
+        index = e.index
+        print(f"Error occurred while processing {value}. Index is {index}")
+        retry_queue.put(index)
+    else:
+        result = e.value
+        results.put(result)
 
 
 def create_file_for_cache() -> str:
@@ -229,16 +234,26 @@ if __name__ == "__main__":
     conn: Connection = sqlite3.connect(path)
     parsed_data: List[dict] = convert_csv_to_dict(os.path.abspath(sys.argv[1]))
     is_var = True
-    pool, results = get_pool_processors(parsed_data, is_var)
-    if terminated is None:
-        for _result in results:
-            _result.wait()
-            is_var = False
-            pool, results = get_pool_processors(parsed_data, is_var)
-            get_result(results)
-    elif not terminated:
-        get_result(results)
-    else:
-        conn.close()
-        sys.exit(1)
-    conn.close()
+
+    with Pool(processes=1) as pool:
+        results = Queue()
+        retry_queue = Queue()
+        for i, dict_data in enumerate(parsed_data, 2):
+            pool.apply_async(parse_data, (i, dict_data, is_var), error_callback=terminate_processors)
+        pool.close()
+        pool.join()
+
+        # Обработка задач, которые не удалось выполнить
+        with Pool(processes=1) as _pool:
+            while not retry_queue.empty():
+                is_var = False
+                task = retry_queue.get()
+                _pool.apply_async(parse_data, (task, parsed_data[task - 2], is_var))
+            _pool.close()
+            _pool.join()
+
+        # Получение результатов
+        results_list = []
+        while not results.empty():
+            results_list.append(results.get())
+        print(results_list)

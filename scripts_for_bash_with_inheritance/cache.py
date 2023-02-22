@@ -8,6 +8,13 @@ from __init__ import logger, logger_stream
 from __init__ import user_xml_river, key_xml_river
 
 
+class MyErrror(Exception):
+    def __init__(self, error, value, index):
+        self.error = error
+        self.value = value
+        self.index = index
+
+
 class InnApi:
     def __init__(self, table_name, conn):
         self.table_name = table_name
@@ -53,7 +60,7 @@ class InnApi:
         self.get_inn_from_site(list_inn, inn_title, count_inn)
 
     @staticmethod
-    def get_code_error(error_code: ET, index: int, is_var):
+    def get_code_error(error_code: ET, index: int, is_var, value):
         if is_var is True:
             error_code.tag = 'error'
         if error_code.tag == 'error':
@@ -68,7 +75,7 @@ class InnApi:
                                 f"Exception - {error_code.text}"
                 logger.error(error_message)
                 logger_stream.error(f"нет_свободных_каналов_на_строке_{index}")
-                raise AttributeError(error_message)
+                raise MyErrror(error_message, value, index)
             elif error_code.attrib.get('code') == '15':
                 error_message = f"No results found in the search engine. Index is {index}. " \
                                 f"Exception - {error_code.text}"
@@ -87,7 +94,7 @@ class InnApi:
                         f"&query={value} ИНН")
         xml_code = r.html.html
         myroot = ET.fromstring(xml_code)
-        self.get_code_error(myroot[0][0], index, is_var)
+        self.get_code_error(myroot[0][0], index, is_var, value)
         index_page = 2 if myroot[0][1].tag == 'correct' else 1
         last_range = int(myroot[0][index_page][0][0].attrib['last'])
         list_inn = {}
