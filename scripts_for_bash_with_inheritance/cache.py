@@ -75,7 +75,7 @@ class InnApi:
                 logger.error(error_message)
                 logger_stream.error(f"не_найдено_результатов_{index}")
             else:
-                error_message = f"Error: not found code error {error_code.attrib['code']}. Index is {index}. " \
+                error_message = f"Error: not found code error {error_code.attrib.get('code')}. Index is {index}. " \
                                 f"Exception - {error_code.text}"
                 logger.error(error_message)
                 logger_stream.error(f"необработанная_ошибка_на_строке_{index}")
