@@ -1,5 +1,7 @@
 import re
 import sys
+import time
+import json
 import sqlite3
 import contextlib
 import numpy as np
@@ -21,15 +23,17 @@ def replace_forms_organizations(company_name: str) -> str:
     """
     Deleting organization forms for the accuracy of determining confidence_rate.
     """
-    for elem in replaced_words:
+    for elem in REPLACED_WORDS:
         company_name: str = company_name.replace(elem, "")
     return company_name.translate({ord(c): "" for c in '"'}).strip()
 
 
-def replace_quotes(sentence: str, quotes: list = replaced_quotes, replaced_str: str = '"') -> str:
+def replace_quotes(sentence: str, quotes: list = None, replaced_str: str = '"') -> str:
     """
     Deleting organization forms for the accuracy of determining confidence_rate.
     """
+    if quotes is None:
+        quotes = REPLACED_QUOTES
     for quote in quotes:
         sentence = sentence.replace(quote, replaced_str)
     return sentence
@@ -71,15 +75,16 @@ def get_company_name_by_sentence(provider: InnApi, sentence: str, index: int, is
     We send the sentence to the Yandex search engine (first we pre-process: translate it into Russian) by the link
     https://xmlriver.com/search_yandex/xml?user=6390&key=e3b3ac2908b2a9e729f1671218c85e12cfe643b0&query=<value> INN
     """
+    sign = '/'
     sentence: str = sentence.translate({ord(c): " " for c in r".,!@#$%^&*()[]{};?\|~=_+"})
     if is_english:
         sentence = sentence.replace('"', "")
         inn, translated = provider.get_inn_from_value(sentence, index)
         return inn, translated
     sentence = replace_quotes(sentence, replaced_str=' ')
-    sentence = re.sub(" +", " ", sentence).strip()
+    sentence = re.sub(" +", " ", sentence).strip() + sign
     translated: str = GoogleTranslator(source='en', target='ru').translate(sentence)
-    translated = replace_quotes(translated, quotes=['"', '«', '»'], replaced_str=' ')
+    translated = replace_quotes(translated, quotes=['"', '«', '»', sign], replaced_str=' ')
     translated = re.sub(" +", " ", translated).strip()
     inn, translated = provider.get_inn_from_value(translated, index)
     return inn, translated
@@ -89,7 +94,7 @@ def find_international_company(cache_inn: InnApi, sentence: str, data: dict, ind
     """
     Search for international companies.
     """
-    for country_and_city in countries_and_cities:
+    for country_and_city in COUNTRIES_AND_CITIES:
         if re.findall(country_and_city, sentence.upper()) and not re.findall("RUSSIA", sentence.upper()):
             data["is_company_name_international"] = True
             get_company_name_by_inn(cache_inn, data, inn=[], sentence=sentence, index=index)
@@ -202,17 +207,18 @@ if __name__ == "__main__":
     conn: Connection = sqlite3.connect(path)
     parsed_data: List[dict] = convert_csv_to_dict(os.path.abspath(sys.argv[1]))
 
-    with Pool(processes=worker_count) as pool:
+    with Pool(processes=WORKER_COUNT) as pool:
         retry_queue: Queue = Queue()
         for i, dict_data in enumerate(parsed_data, 2):
             pool.apply_async(parse_data, (i, dict_data), error_callback=handle_errors)
         pool.close()
         pool.join()
 
-        with Pool(processes=worker_count) as _pool:
-            is_var = False
-            while not retry_queue.empty():
-                index_queue = retry_queue.get()
-                _pool.apply_async(parse_data, (index_queue, parsed_data[index_queue - 2]))
-            _pool.close()
-            _pool.join()
+        if not retry_queue.empty():
+            time.sleep(60)
+            with Pool(processes=WORKER_COUNT) as _pool:
+                while not retry_queue.empty():
+                    index_queue = retry_queue.get()
+                    _pool.apply_async(parse_data, (index_queue, parsed_data[index_queue - 2]))
+                _pool.close()
+                _pool.join()

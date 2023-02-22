@@ -1,11 +1,10 @@
 import re
 import contextlib
 import validate_inn
-from typing import Union
 from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
 from requests_html import HTMLSession
-from __init__ import logger, logger_stream, user_xml_river, key_xml_river
+from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE
 
 
 class MyError(Exception):
@@ -60,36 +59,27 @@ class InnApi:
         self.get_inn_from_site(list_inn, inn_title, count_inn)
 
     @staticmethod
-    def log_error(prefix: str, index: int, message: str) -> None:
+    def log_error(prefix: str, message: str) -> None:
         logger.error(message)
-        logger_stream.error(f"{prefix}{index}")
+        logger_stream.error(f"{prefix}")
 
     def get_code_error(self, error_code: ET, index: int, value: str) -> None:
-        code: Union[str, None] = error_code.attrib.get('code')
+        error_code.tag = 'error'
         if error_code.tag == 'error':
+            code = error_code.attrib.get('code')
+            message = MESSAGE_TEMPLATE.get(code,
+                                           "Error: not found code error {}. Index is {}. Exception - {}. Value - {}")
+            message = message.format(index, error_code.text, value, code)
+            prefix = PREFIX_TEMPLATE.get(code, "необработанная_ошибка_на_строке_")
+            self.log_error(prefix + str(index), message)
             if code == '200':
-                message: str = f"Error: the money ran out. Index is {index}. Exception - {error_code.text}. " \
-                               f"Value - {value}"
-                self.log_error("закончились_деньги_на_строке_", index, message)
                 raise AssertionError(message)
-            elif code == '110':
-                message = f"Error: there are no free channels for data collection. Index is {index}. " \
-                          f"Exception - {error_code.text}. Value - {value}"
-                self.log_error("нет_свободных_каналов_на_строке_", index, message)
-                raise MyError(message, value, index)
-            elif code == '15':
-                message = f"No results found in the search engine. Index is {index}. Exception - {error_code.text}. " \
-                          f"Value - {value}"
-                self.log_error("не_найдено_результатов_", index, message)
-            else:
-                message = f"Error: not found code error {code}. Index is {index}. Exception - {error_code.text}. " \
-                          f"Value - {value}"
-                self.log_error("необработанная_ошибка_на_строке_", index, message)
+            elif code == '110' or code != '15':
                 raise MyError(message, value, index)
 
     def get_inn_by_yandex(self, value, index):
         session = HTMLSession()
-        r = session.get(f"https://xmlriver.com/search_yandex/xml?user={user_xml_river}&key={key_xml_river}"
+        r = session.get(f"https://xmlriver.com/search_yandex/xml?user={USER_XML_RIVER}&key={KEY_XML_RIVER}"
                         f"&query={value} ИНН")
         xml_code = r.html.html
         myroot = ET.fromstring(xml_code)
