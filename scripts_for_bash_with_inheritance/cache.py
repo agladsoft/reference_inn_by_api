@@ -127,8 +127,6 @@ class SearchEngineParser(LegalEntitiesParser):
         """
 
         """
-        error_code.tag = 'error'
-        error_code.attrib['code'] = '110'
         if error_code.tag == 'error':
             code: Union[str, None] = error_code.attrib.get('code')
             message: str = MESSAGE_TEMPLATE.get(code, "Error: not found code error {}. Index is {}. Exception - {}. "
