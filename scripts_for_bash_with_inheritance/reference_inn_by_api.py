@@ -233,7 +233,6 @@ if __name__ == "__main__":
     if terminated is None:
         for _result in results:
             _result.wait()
-            time.sleep(2)
             is_var = False
             pool, results = get_pool_processors(parsed_data, is_var)
             get_result(results)

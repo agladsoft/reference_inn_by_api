@@ -58,18 +58,18 @@ class InnApi:
             error_code.tag = 'error'
         if error_code.tag == 'error':
             error_code.attrib['code'] = '110'
-            if error_code.attrib['code'] == '200':
+            if error_code.attrib.get('code') == '200':
                 error_message: str = f"Error: the money ran out. Index is {index}. Exception - {error_code.text}"
                 logger.error(error_message)
                 logger_stream.error(f"закончились_деньги_на_строке_{index}")
                 raise AssertionError(error_message)
-            elif error_code.attrib['code'] == '110':
+            elif error_code.attrib.get('code') == '110':
                 error_message = f"Error: there are no free channels for data collection. Index is {index}. " \
                                 f"Exception - {error_code.text}"
                 logger.error(error_message)
                 logger_stream.error(f"нет_свободных_каналов_на_строке_{index}")
                 raise AttributeError(error_message)
-            elif error_code.attrib['code'] == '15':
+            elif error_code.attrib.get('code') == '15':
                 error_message = f"No results found in the search engine. Index is {index}. " \
                                 f"Exception - {error_code.text}"
                 logger.error(error_message)
