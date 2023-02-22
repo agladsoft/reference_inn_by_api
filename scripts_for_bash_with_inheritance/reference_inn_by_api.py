@@ -9,9 +9,9 @@ from __init__ import *
 from pathlib import Path
 from fuzzywuzzy import fuzz
 from pandas import DataFrame
-from typing import List, Tuple
 from sqlite3 import Connection
-from cache import InnApi, MyErrror
+from cache import InnApi, MyError
+from typing import List, Tuple, Any
 from multiprocessing import Pool, Queue
 from pandas.io.parsers import TextFileReader
 from deep_translator import GoogleTranslator, exceptions
@@ -60,12 +60,12 @@ def get_company_name_by_inn(provider: InnApi, data: dict, inn: list, sentence: s
     company_name: str = re.sub(" +", " ", company_name)
     data["company_name_unified"] = company_name
     company_name = replace_forms_organizations(company_name)
-    fuzz_company_name = fuzz.partial_ratio(company_name.upper(), translated.upper())
+    fuzz_company_name: int = fuzz.partial_ratio(company_name.upper(), translated.upper())
     fuzz_company_name = compare_different_fuzz(company_name, translated, fuzz_company_name, data)
     data['confidence_rate'] = fuzz_company_name
 
 
-def get_company_name_by_sentence(provider: InnApi, sentence: str, index: int, is_var, is_english: bool = False) \
+def get_company_name_by_sentence(provider: InnApi, sentence: str, index: int, is_english: bool = False) \
         -> Tuple[str, str]:
     """
     We send the sentence to the Yandex search engine (first we pre-process: translate it into Russian) by the link
@@ -74,14 +74,14 @@ def get_company_name_by_sentence(provider: InnApi, sentence: str, index: int, is
     sentence: str = sentence.translate({ord(c): " " for c in r".,!@#$%^&*()[]{};?\|~=_+"})
     if is_english:
         sentence = sentence.replace('"', "")
-        inn, translated = provider.get_inn_from_value(sentence, index, is_var)
+        inn, translated = provider.get_inn_from_value(sentence, index)
         return inn, translated
     sentence = replace_quotes(sentence, replaced_str=' ')
     sentence = re.sub(" +", " ", sentence).strip()
     translated: str = GoogleTranslator(source='en', target='ru').translate(sentence)
     translated = replace_quotes(translated, quotes=['"', '«', '»'], replaced_str=' ')
     translated = re.sub(" +", " ", translated).strip()
-    inn, translated = provider.get_inn_from_value(translated, index, is_var)
+    inn, translated = provider.get_inn_from_value(translated, index)
     return inn, translated
 
 
@@ -97,7 +97,7 @@ def find_international_company(cache_inn: InnApi, sentence: str, data: dict, ind
         data["is_company_name_international"] = False
 
 
-def get_inn_from_row(sentence: str, data: dict, index: int, is_var) -> None:
+def get_inn_from_row(sentence: str, data: dict, index: int) -> None:
     """
     Full processing of the sentence, including 1). inn search by offer -> company search by inn,
     2). inn search in yandex by request -> company search by inn.
@@ -109,14 +109,13 @@ def get_inn_from_row(sentence: str, data: dict, index: int, is_var) -> None:
         with contextlib.suppress(Exception):
             item_inn2 = validate_inn.validate(item_inn)
             list_inn.append(item_inn2)
-    # find_international_company(cache_inn, sentence, data, index)
     data['original_file_name'] = os.path.basename(sys.argv[1])
     data['original_file_parsed_on'] = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     if list_inn:
         get_company_name_by_inn(cache_inn, data, inn=list_inn[0], sentence=sentence, index=index)
     else:
         cache_name_inn: InnApi = InnApi("company_name_and_inn", conn)
-        inn, translated = get_company_name_by_sentence(cache_name_inn, sentence, index, is_var)
+        inn, translated = get_company_name_by_sentence(cache_name_inn, sentence, index)
         get_company_name_by_inn(cache_inn, data, inn, sentence, translated=translated, index=index)
 
 
@@ -125,22 +124,20 @@ def write_to_json(index: int, data: dict) -> None:
     Writing data to json.
     """
     logger.info(f'{index} data is {data}')
-    # logger_stream.info(f'{index} data is {data}')
     basename: str = os.path.basename(os.path.abspath(sys.argv[1]))
     output_file_path: str = os.path.join(sys.argv[2], f'{basename}_{index}.json')
     with open(f"{output_file_path}", 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 
-def parse_data(index: int, data: dict, is_var) -> None:
+def parse_data(index: int, data: dict) -> None:
     """
     Processing each row.
     """
-    print(f"is_var - {is_var}")
     for key, sentence in data.items():
         try:
             if key == 'company_name':
-                get_inn_from_row(sentence, data, index, is_var)
+                get_inn_from_row(sentence, data, index)
         except (IndexError, ValueError, TypeError, sqlite3.OperationalError) as ex:
             logger.error(f'Error: not found inn in Yandex {index, sentence} (most likely a foreign company). '
                          f'Exception - {ex}')
@@ -152,24 +149,6 @@ def parse_data(index: int, data: dict, is_var) -> None:
             logger_stream.error(f'много_запросов_к_переводчику_на_строке_{index}')
             raise AssertionError(error_message) from ex_translator
     write_to_json(index, data)
-
-
-def terminate_processors(e):
-    """
-    Interrupt all processors in case of an error.
-    """
-    global terminated
-    if type(e) is AssertionError:
-        terminated = True
-        pool.terminate()
-    elif type(e) is MyErrror:
-        value = e.value
-        index = e.index
-        print(f"Error occurred while processing {value}. Index is {index}")
-        retry_queue.put(index)
-    else:
-        result = e.value
-        results.put(result)
 
 
 def create_file_for_cache() -> str:
@@ -199,61 +178,41 @@ def convert_csv_to_dict(filename: str) -> List[dict]:
     dataframe['is_inn_found_auto'] = None
     dataframe['original_file_name'] = None
     dataframe['original_file_parsed_on'] = None
-    # dataframe["is_company_name_international"] = None
     dataframe['confidence_rate'] = None
     return dataframe.to_dict('records')
 
 
-def get_result(results_list) -> None:
+def handle_errors(e: Any) -> None:
     """
-    Return every result that comes.
+    Interrupt all processors in case of an error.
     """
-    for result in results_list:
-        with contextlib.suppress(Exception):
-            result.get()
-
-
-def get_pool_processors(data: list, is_var) -> Tuple[Pool, list]:
-    """
-    Get a list of results.
-    """
-    global pool
-    pool = Pool(processes=worker_count)
-    _results: list = [pool.apply_async(parse_data, (i, dict_data, is_var), error_callback=terminate_processors)
-                      for i, dict_data in enumerate(data, 2)]
-    pool.close()
-    pool.join()
-    return pool, _results
+    if type(e) is AssertionError:
+        pool.terminate()
+    elif type(e) is MyError:
+        index: int = e.index
+        logger.error(f"An error occured in which the processor was added to the queue {e.value}. "
+                     f"Index is {index}")
+        retry_queue.put(index)
 
 
 if __name__ == "__main__":
     pool: Pool
     procs: list = []
     path: str = create_file_for_cache()
-    terminated: bool = False
     conn: Connection = sqlite3.connect(path)
     parsed_data: List[dict] = convert_csv_to_dict(os.path.abspath(sys.argv[1]))
-    is_var = True
 
-    with Pool(processes=1) as pool:
-        results = Queue()
-        retry_queue = Queue()
+    with Pool(processes=worker_count) as pool:
+        retry_queue: Queue = Queue()
         for i, dict_data in enumerate(parsed_data, 2):
-            pool.apply_async(parse_data, (i, dict_data, is_var), error_callback=terminate_processors)
+            pool.apply_async(parse_data, (i, dict_data), error_callback=handle_errors)
         pool.close()
         pool.join()
 
-        # Обработка задач, которые не удалось выполнить
-        with Pool(processes=1) as _pool:
+        with Pool(processes=worker_count) as _pool:
+            is_var = False
             while not retry_queue.empty():
-                is_var = False
-                task = retry_queue.get()
-                _pool.apply_async(parse_data, (task, parsed_data[task - 2], is_var))
+                index_queue = retry_queue.get()
+                _pool.apply_async(parse_data, (index_queue, parsed_data[index_queue - 2]))
             _pool.close()
             _pool.join()
-
-        # Получение результатов
-        results_list = []
-        while not results.empty():
-            results_list.append(results.get())
-        print(results_list)
