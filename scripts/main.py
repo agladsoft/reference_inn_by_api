@@ -143,7 +143,7 @@ class ReferenceInn(object):
             try:
                 if key == 'company_name':
                     self.get_inn_from_row(sentence, data, index)
-            except (IndexError, ValueError, TypeError, sqlite3.OperationalError) as ex:
+            except (Exception, sqlite3.OperationalError) as ex:
                 logger.error(f'Error: not found inn in Yandex {index, sentence} (most likely a foreign company). '
                              f'Exception - {ex}')
                 logger_stream.error(f'Error: not found inn in Yandex {index, sentence} (most likely a foreign company).'
@@ -188,7 +188,7 @@ class ReferenceInn(object):
 
 def handle_errors(e: Any) -> None:
     """
-    Interrupt all processors in case of an error.
+    Interrupt all processors in case of an error or adding in the queue.
     """
     if type(e) is AssertionError:
         pool.terminate()

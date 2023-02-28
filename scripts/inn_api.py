@@ -135,8 +135,8 @@ class SearchEngineParser(LegalEntitiesParser):
         """
         if error_code.tag == 'error':
             code: Union[str, None] = error_code.attrib.get('code')
-            message: str = MESSAGE_TEMPLATE.get(code, "Error: not found code error {}. Index is {}. Exception - {}. "
-                                                      "Value - {}")
+            message: str = MESSAGE_TEMPLATE.get(code, "Error: not found code error. Index is {}. Exception - {}. "
+                                                      "Value - {}. Error code - {}")
             message = message.format(index, error_code.text, value, code)
             prefix: str = PREFIX_TEMPLATE.get(code, "необработанная_ошибка_на_строке_")
             self.log_error(prefix + str(index), message)
