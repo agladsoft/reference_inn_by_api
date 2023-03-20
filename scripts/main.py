@@ -175,6 +175,7 @@ class ReferenceInn(object):
         dataframe.columns = ['company_name']
         dataframe = dataframe.drop_duplicates(subset='company_name', keep="first")
         dataframe = dataframe.replace({np.nan: None})
+        dataframe['company_name'] = dataframe['company_name'].replace({'_x000D_': ''}, regex=True)
         dataframe['company_name_rus'] = None
         dataframe['company_name_unified_en'] = None
         dataframe['company_inn'] = None
