@@ -173,7 +173,7 @@ class ReferenceInn(object):
         """
         dataframe: TextFileReader | DataFrame = pd.read_csv(self.filename)
         dataframe.columns = ['company_name']
-        dataframe = dataframe.drop_duplicates(subset='company_name', keep="first")
+        # dataframe = dataframe.drop_duplicates(subset='company_name', keep="first")
         dataframe = dataframe.replace({np.nan: None})
         dataframe['company_name'] = dataframe['company_name'].replace({'_x000D_': ''}, regex=True)
         dataframe['company_name_rus'] = None

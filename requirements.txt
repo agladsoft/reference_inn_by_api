@@ -5,7 +5,6 @@ python-stdnum==1.17
 deep-translator==1.9.0
 fuzzywuzzy==0.18.0
 python-Levenshtein==0.20.5
-spacy==3.4.3
 bs4==0.0.1
 beautifulsoup4==4.11.1
 numpy==1.23.5
