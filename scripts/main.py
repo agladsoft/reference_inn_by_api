@@ -49,7 +49,7 @@ class ReferenceInn(object):
         """
         Comparing the maximum value of the two confidence_rate.
         """
-        company_name_en: str = GoogleTranslator(source='ru', target='en').translate(company_name)
+        company_name_en: str = GoogleTranslator(source='ru', target='en').translate(company_name[:4500])
         data["company_name_unified_en"] = company_name_en
         fuzz_company_name_two: int = fuzz.partial_ratio(company_name_en.upper(), translated.upper())
         return max(fuzz_company_name, fuzz_company_name_two)
@@ -61,7 +61,7 @@ class ReferenceInn(object):
         on the website https://www.rusprofile.ru/.
         """
         if not translated:
-            translated: str = GoogleTranslator(source='en', target='ru').translate(sentence)
+            translated: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500])
         data['is_inn_found_auto'] = True
         data['company_name_rus'] = translated
         inn, company_name = provider.get_inn_from_cache(inn, index)
@@ -87,7 +87,7 @@ class ReferenceInn(object):
             return inn, translated
         sentence = self.replace_quotes(sentence, replaced_str=' ')
         sentence = re.sub(" +", " ", sentence).strip() + sign
-        translated: str = GoogleTranslator(source='en', target='ru').translate(sentence)
+        translated: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500])
         translated = self.replace_quotes(translated, quotes=['"', '«', '»', sign], replaced_str=' ')
         translated = re.sub(" +", " ", translated).strip()
         inn, translated = provider.get_inn_from_cache(translated, index)
