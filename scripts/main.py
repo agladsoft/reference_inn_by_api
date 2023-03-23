@@ -143,7 +143,7 @@ class ReferenceInn(object):
             try:
                 if key == 'company_name':
                     self.get_inn_from_row(sentence, data, index)
-            except (Exception, sqlite3.OperationalError) as ex:
+            except (IndexError, ValueError, TypeError, sqlite3.OperationalError) as ex:
                 logger.error(f'Error: not found inn in Yandex {index, sentence} (most likely a foreign company). '
                              f'Exception - {ex}')
                 logger_stream.error(f'Error: not found inn in Yandex {index, sentence} (most likely a foreign company).'
@@ -216,7 +216,7 @@ if __name__ == "__main__":
         pool.join()
 
         if not retry_queue.empty():
-            time.sleep(60)
+            time.sleep(120)
             logger.error("Processing of processes that are in the queue")
             with Pool(processes=WORKER_COUNT) as _pool:
                 while not retry_queue.empty():

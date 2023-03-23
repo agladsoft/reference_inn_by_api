@@ -58,6 +58,7 @@ do
 
   exit_code=$?
   echo "Exit code ${exit_code}"
+  echo "Exit message ${exit_message}"
   if [[ ${exit_code} == 0 ]]
 	then
 	  mv "${csv_name}" "${done_path}"
