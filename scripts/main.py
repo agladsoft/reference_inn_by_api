@@ -147,12 +147,12 @@ class ReferenceInn(object):
                 if key == 'company_name':
                     self.get_inn_from_row(sentence, data, index)
             except (IndexError, ValueError, TypeError, sqlite3.OperationalError) as ex:
-                logger.error(f'Error: not found inn in Yandex {index, sentence} (most likely a foreign company). '
+                logger.error(f'Error: not found inn in Yandex. Pid {os.getpid()}. Data is {index, sentence} (most likely a foreign company). '
                              f'Exception - {ex}')
-                logger_stream.error(f'Error: not found inn in Yandex {index, sentence} (most likely a foreign company).'
+                logger_stream.error(f'Error: not found inn in Yandex. Pid {os.getpid()}. Data is {index, sentence} (most likely a foreign company).'
                                     f' Exception - {ex}')
             except exceptions.TooManyRequests as ex_translator:
-                error_message = f'Error: too many requests to the translator. Exception - {ex_translator}'
+                error_message = f'Error: too many requests to the translator. Pid {os.getpid()}. Exception - {ex_translator}'
                 logger.error(error_message)
                 logger_stream.error(f'много_запросов_к_переводчику_на_строке_{index}')
                 raise AssertionError(error_message) from ex_translator
