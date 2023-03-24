@@ -214,19 +214,18 @@ if __name__ == "__main__":
     with Pool(processes=WORKER_COUNT) as pool:
         retry_queue: Queue = Queue()
         for i, dict_data in enumerate(parsed_data, 2):
-            procs.append(pool.apply_async(reference_inn.parse_data, (i, dict_data), error_callback=handle_errors))
-            time.sleep(0.1)
-        results = [proc.get() for proc in procs]
+            pool.apply_async(reference_inn.parse_data, (i, dict_data), error_callback=handle_errors)
+        pool.close()
+        pool.join()
 
         if not retry_queue.empty():
             time.sleep(120)
-            queue_procs: list = []
             logger.error("Processing of processes that are in the queue")
             with Pool(processes=WORKER_COUNT) as _pool:
                 while not retry_queue.empty():
                     index_queue = retry_queue.get()
-                    queue_procs.append(_pool.apply_async(reference_inn.parse_data,
-                                                         (index_queue, parsed_data[index_queue - 2])))
-                results = [queue_proc.get() for queue_proc in queue_procs]
+                    _pool.apply_async(reference_inn.parse_data, (index_queue, parsed_data[index_queue - 2]))
+                _pool.close()
+                _pool.join()
 
     conn.close()
