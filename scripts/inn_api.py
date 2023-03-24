@@ -1,3 +1,4 @@
+import os
 import re
 import sqlite3
 import contextlib
@@ -50,6 +51,7 @@ class LegalEntitiesParser(object):
         """
         try:
             session: HTMLSession = HTMLSession()
+            logger.info(f"Pid {os.getpid()}. Data is {value}")
             api_inn: Response = session.get(f'https://www.rusprofile.ru/search?query={value}')
             html_code: str = api_inn.html.html
             html: BeautifulSoup = BeautifulSoup(html_code, 'html.parser')
@@ -150,6 +152,7 @@ class SearchEngineParser(LegalEntitiesParser):
         Looking for the INN in the search engine, and then we parse through the sites.
         """
         session: HTMLSession = HTMLSession()
+        logger.info(f"Pid {os.getpid()}. Data is {value}")
         r: Response = session.get(f"https://xmlriver.com/search_yandex/xml?user={USER_XML_RIVER}&key={KEY_XML_RIVER}"
                                   f"&query={value} ИНН")
         xml_code: str = r.html.html

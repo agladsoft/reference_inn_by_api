@@ -132,7 +132,7 @@ class ReferenceInn(object):
         """
         Writing data to json.
         """
-        logger.info(f'{index} data is {data}')
+        logger.info(f'{index} index. Pid {os.getpid()}. Time {datetime.datetime.now()}. Data is {data}')
         basename: str = os.path.basename(self.filename)
         output_file_path: str = os.path.join(self.directory, f'{basename}_{index}.json')
         with open(f"{output_file_path}", 'w', encoding='utf-8') as f:
@@ -214,18 +214,19 @@ if __name__ == "__main__":
     with Pool(processes=WORKER_COUNT) as pool:
         retry_queue: Queue = Queue()
         for i, dict_data in enumerate(parsed_data, 2):
-            pool.apply_async(reference_inn.parse_data, (i, dict_data), error_callback=handle_errors)
-        pool.close()
-        pool.join()
+            procs.append(pool.apply_async(reference_inn.parse_data, (i, dict_data), error_callback=handle_errors))
+            time.sleep(0.1)
+        results = [proc.get() for proc in procs]
 
         if not retry_queue.empty():
             time.sleep(120)
+            queue_procs: list = []
             logger.error("Processing of processes that are in the queue")
             with Pool(processes=WORKER_COUNT) as _pool:
                 while not retry_queue.empty():
                     index_queue = retry_queue.get()
-                    _pool.apply_async(reference_inn.parse_data, (index_queue, parsed_data[index_queue - 2]))
-                _pool.close()
-                _pool.join()
+                    queue_procs.append(_pool.apply_async(reference_inn.parse_data,
+                                                         (index_queue, parsed_data[index_queue - 2])))
+                results = [queue_proc.get() for queue_proc in queue_procs]
 
     conn.close()
