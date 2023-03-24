@@ -49,7 +49,10 @@ class ReferenceInn(object):
         """
         Comparing the maximum value of the two confidence_rate.
         """
-        company_name_en: str = GoogleTranslator(source='ru', target='en').translate(company_name[:4500])
+        try:
+            company_name_en: str = GoogleTranslator(source='ru', target='en').translate(company_name[:4500])
+        except exceptions.NotValidPayload:
+            company_name_en = company_name
         data["company_name_unified_en"] = company_name_en
         fuzz_company_name_two: int = fuzz.partial_ratio(company_name_en.upper(), translated.upper())
         return max(fuzz_company_name, fuzz_company_name_two)
