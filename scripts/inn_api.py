@@ -2,6 +2,7 @@ import os
 import re
 import sqlite3
 import datetime
+import requests
 import contextlib
 import validate_inn
 from requests import Response
@@ -158,8 +159,11 @@ class SearchEngineParser(LegalEntitiesParser):
         session: HTMLSession = HTMLSession()
         logger.info(
             f"Before request (yandex). Pid is {os.getpid()}. Time is {datetime.datetime.now()}. Data is {value}")
-        r: Response = session.get(f"https://xmlriver.com/search_yandex/xml?user={USER_XML_RIVER}"
-                                  f"&key={KEY_XML_RIVER}&query={value} ИНН")
+        try:
+            r: Response = session.get(f"https://xmlriver.com/search_yandex/xml?user={USER_XML_RIVER}"
+                                      f"&key={KEY_XML_RIVER}&query={value} ИНН", timeout=120)
+        except requests.exceptions.ReadTimeout as e:
+            raise MyError(f"Error: run time out. Index is {index}. Value - {value}", value, index) from e
         logger.info(f"After request (yandex). Pid is {os.getpid()}. Time is {datetime.datetime.now()}. Data is {value}")
         xml_code: str = r.html.html
         myroot: ElemTree = ElemTree.fromstring(xml_code)
