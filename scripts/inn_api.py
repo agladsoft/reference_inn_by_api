@@ -1,6 +1,7 @@
 import os
 import re
 import sqlite3
+import datetime
 import contextlib
 import validate_inn
 from requests import Response
@@ -51,8 +52,9 @@ class LegalEntitiesParser(object):
         """
         try:
             session: HTMLSession = HTMLSession()
-            logger.info(f"Pid {os.getpid()}. Data is {value}")
+            logger.info(f"Before request. Pid is {os.getpid()}. Time is {datetime.datetime.now()}. Data is {value}")
             api_inn: Response = session.get(f'https://www.rusprofile.ru/search?query={value}')
+            logger.info(f"After request. Pid is {os.getpid()}. Time is {datetime.datetime.now()}. Data is {value}")
             html_code: str = api_inn.html.html
             html: BeautifulSoup = BeautifulSoup(html_code, 'html.parser')
             page_inn: Tag = html.find('span', attrs={'id': _id})
@@ -152,9 +154,10 @@ class SearchEngineParser(LegalEntitiesParser):
         Looking for the INN in the search engine, and then we parse through the sites.
         """
         session: HTMLSession = HTMLSession()
-        logger.info(f"Pid {os.getpid()}. Data is {value}")
+        logger.info(f"Before request. Pid is {os.getpid()}. Time is {datetime.datetime.now()}. Data is {value}")
         r: Response = session.get(f"https://xmlriver.com/search_yandex/xml?user={USER_XML_RIVER}&key={KEY_XML_RIVER}"
                                   f"&query={value} ИНН")
+        logger.info(f"After request. Pid is {os.getpid()}. Time is {datetime.datetime.now()}. Data is {value}")
         xml_code: str = r.html.html
         myroot: ElemTree = ElemTree.fromstring(xml_code)
         self.get_code_error(myroot[0][0], index, value)
