@@ -2,6 +2,7 @@ import os
 import re
 import sqlite3
 import datetime
+import requests
 import contextlib
 import validate_inn
 from requests import Response
@@ -52,9 +53,11 @@ class LegalEntitiesParser(object):
         """
         try:
             session: HTMLSession = HTMLSession()
-            logger.info(f"Before request (rusprofile). Pid is {os.getpid()}. Time is {datetime.datetime.now()}. Data is {value}")
+            logger.info(
+                f"Before request (rusprofile). Pid is {os.getpid()}. Time is {datetime.datetime.now()}. Data is {value}")
             api_inn: Response = session.get(f'https://www.rusprofile.ru/search?query={value}')
-            logger.info(f"After request (rusprofile). Pid is {os.getpid()}. Time is {datetime.datetime.now()}. Data is {value}")
+            logger.info(
+                f"After request (rusprofile). Pid is {os.getpid()}. Time is {datetime.datetime.now()}. Data is {value}")
             html_code: str = api_inn.html.html
             html: BeautifulSoup = BeautifulSoup(html_code, 'html.parser')
             page_inn: Tag = html.find('span', attrs={'id': _id})
@@ -63,7 +66,7 @@ class LegalEntitiesParser(object):
             page_many_company: ResultSet = html.findAll("div", attrs={"class": "company-item"})
             for inn, inn_name in zip(page_many_inn, page_many_company):
                 if not page_inn and not page_name and inn.text == value:
-                    var_api_name: str = inn_name.find("span", {"class", "finded-text"}).parent.parent.parent.parent.\
+                    var_api_name: str = inn_name.find("span", {"class", "finded-text"}).parent.parent.parent.parent. \
                         find("a").text.strip()
                     var_api_name = re.sub(" +", " ", var_api_name)
                     break
@@ -153,12 +156,12 @@ class SearchEngineParser(LegalEntitiesParser):
         """
         Looking for the INN in the search engine, and then we parse through the sites.
         """
-        session: HTMLSession = HTMLSession()
-        logger.info(f"Before request (yandex). Pid is {os.getpid()}. Time is {datetime.datetime.now()}. Data is {value}")
-        r: Response = session.get(f"https://xmlriver.com/search_yandex/xml?user={USER_XML_RIVER}&key={KEY_XML_RIVER}"
-                                  f"&query={value} ИНН")
+        logger.info(
+            f"Before request (yandex). Pid is {os.getpid()}. Time is {datetime.datetime.now()}. Data is {value}")
+        r: Response = requests.get(f"https://xmlriver.com/search_yandex/xml?user={USER_XML_RIVER}"
+                                   f"&key={KEY_XML_RIVER}&query={value} ИНН")
         logger.info(f"After request (yandex). Pid is {os.getpid()}. Time is {datetime.datetime.now()}. Data is {value}")
-        xml_code: str = r.html.html
+        xml_code: str = r.text
         myroot: ElemTree = ElemTree.fromstring(xml_code)
         self.get_code_error(myroot[0][0], index, value)
         index_page: int = 2 if myroot[0][1].tag == 'correct' else 1
