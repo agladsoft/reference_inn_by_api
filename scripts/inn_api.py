@@ -1,7 +1,6 @@
 import os
 import re
 import sqlite3
-import datetime
 import requests
 import contextlib
 import validate_inn
@@ -53,11 +52,9 @@ class LegalEntitiesParser(object):
         """
         try:
             session: HTMLSession = HTMLSession()
-            logger.info(
-                f"Before request (rusprofile). Pid is {os.getpid()}. Time is {datetime.datetime.now()}. Data is {value}")
+            logger.info(f"Before request. Data is {value}", pid=os.getpid())
             api_inn: Response = session.get(f'https://www.rusprofile.ru/search?query={value}')
-            logger.info(
-                f"After request (rusprofile). Pid is {os.getpid()}. Time is {datetime.datetime.now()}. Data is {value}")
+            logger.info(f"After request. Data is {value}", pid=os.getpid())
             html_code: str = api_inn.html.html
             html: BeautifulSoup = BeautifulSoup(html_code, 'html.parser')
             page_inn: Tag = html.find('span', attrs={'id': _id})
@@ -97,10 +94,10 @@ class LegalEntitiesParser(object):
                 self.cache_add_and_save(api_inn, api_name)
                 break
             else:
-                logger.error(f"Error: not found inn {api_inn} in rusprofile. Index is {index}. Unified company name is "
-                             f"{api_name}")
-                logger_stream.error(f"Error: not found inn {api_inn} in rusprofile. Index is {index}."
-                                    f" Unified company name is {api_name}")
+                logger.error(f"Not found inn {api_inn} in rusprofile. Index is {index}. Unified company name is "
+                             f"{api_name}", pid=os.getpid())
+                logger_stream.error(f"Not found inn {api_inn} in rusprofile. Index is {index}."
+                                    f" Unified company name is {api_name}", pid=os.getpid())
         return api_inn, api_name
 
 
@@ -142,7 +139,7 @@ class SearchEngineParser(LegalEntitiesParser):
         """
         if error_code.tag == 'error':
             code: Union[str, None] = error_code.attrib.get('code')
-            message: str = MESSAGE_TEMPLATE.get(code, "Error: not found code error. Index is {}. Exception - {}. "
+            message: str = MESSAGE_TEMPLATE.get(code, "Not found code error. Index is {}. Exception - {}. "
                                                       "Value - {}. Error code - {}")
             message = message.format(index, error_code.text, value, code)
             prefix: str = PREFIX_TEMPLATE.get(code, "необработанная_ошибка_на_строке_")
@@ -157,14 +154,13 @@ class SearchEngineParser(LegalEntitiesParser):
         Looking for the INN in the search engine, and then we parse through the sites.
         """
         session: HTMLSession = HTMLSession()
-        logger.info(
-            f"Before request (yandex). Pid is {os.getpid()}. Time is {datetime.datetime.now()}. Data is {value}")
+        logger.info(f"Before request. Data is {value}", pid=os.getpid())
         try:
             r: Response = session.get(f"https://xmlriver.com/search_yandex/xml?user={USER_XML_RIVER}"
                                       f"&key={KEY_XML_RIVER}&query={value} ИНН", timeout=120)
         except requests.exceptions.ReadTimeout as e:
-            raise MyError(f"Error: run time out. Index is {index}. Value - {value}", value, index) from e
-        logger.info(f"After request (yandex). Pid is {os.getpid()}. Time is {datetime.datetime.now()}. Data is {value}")
+            raise MyError(f"Run time out. Index is {index}. Value - {value}", value, index) from e
+        logger.info(f"After request. Data is {value}", pid=os.getpid())
         xml_code: str = r.html.html
         myroot: ElemTree = ElemTree.fromstring(xml_code)
         self.get_code_error(myroot[0][0], index, value)
@@ -177,9 +173,9 @@ class SearchEngineParser(LegalEntitiesParser):
                 self.get_inn_from_html(myroot, index_page, results, dict_inn, count_inn)
             except Exception as ex:
                 logger.warning(
-                    f"Warning: description {value} not found in the Yandex. Index is {index}. Exception - {ex}")
-                logger_stream.warning(f"Warning: description {value} not found in the Yandex. Index is {index}. "
-                                      f"Exception - {ex}")
+                    f"Description {value} not found in the Yandex. Index is {index}. Exception - {ex}", pid=os.getpid())
+                logger_stream.warning(f"Description {value} not found in the Yandex. Index is {index}. "
+                                      f"Exception - {ex}", pid=os.getpid())
         return max(dict_inn, key=dict_inn.get) if dict_inn else "None"
 
     def get_inn_from_cache(self, value: str, index: int) -> Tuple[str, str]:

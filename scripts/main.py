@@ -132,7 +132,7 @@ class ReferenceInn(object):
         """
         Writing data to json.
         """
-        logger.info(f'{index} index. Pid {os.getpid()}. Time {datetime.datetime.now()}. Data is {data}')
+        logger.info(f'{index} index. Data is {data}', pid=os.getpid())
         basename: str = os.path.basename(self.filename)
         output_file_path: str = os.path.join(self.directory, f'{basename}_{index}.json')
         with open(f"{output_file_path}", 'w', encoding='utf-8') as f:
@@ -147,14 +147,14 @@ class ReferenceInn(object):
                 if key == 'company_name':
                     self.get_inn_from_row(sentence, data, index)
             except (IndexError, ValueError, TypeError, sqlite3.OperationalError) as ex:
-                logger.error(f'Error: not found inn in Yandex. Pid {os.getpid()}. Data is {index, sentence} (most likely a foreign company). '
-                             f'Exception - {ex}')
-                logger_stream.error(f'Error: not found inn in Yandex. Pid {os.getpid()}. Data is {index, sentence} (most likely a foreign company).'
-                                    f' Exception - {ex}')
+                logger.error(f'Not found inn in Yandex. Data is {index, sentence} (most likely a foreign company). '
+                             f'Exception - {ex}', pid=os.getpid())
+                logger_stream.error(f'Not found inn in Yandex. Data is {index, sentence} (most likely a foreign company).'
+                                    f' Exception - {ex}', pid=os.getpid())
             except exceptions.TooManyRequests as ex_translator:
-                error_message = f'Error: too many requests to the translator. Pid {os.getpid()}. Exception - {ex_translator}'
-                logger.error(error_message)
-                logger_stream.error(f'много_запросов_к_переводчику_на_строке_{index}')
+                error_message = f'Too many requests to the translator. Exception - {ex_translator}'
+                logger.error(error_message, pid=os.getpid())
+                logger_stream.error(f'много_запросов_к_переводчику_на_строке_{index}', pid=os.getpid())
                 raise AssertionError(error_message) from ex_translator
         self.write_to_json(index, data)
 
@@ -198,8 +198,8 @@ def handle_errors(e: Any) -> None:
         pool.terminate()
     elif type(e) is MyError:
         index: int = e.index
-        logger.error(f"An error occured in which the processor was added to the queue {e.value}. "
-                     f"Index is {index}")
+        logger.error(f"An error occured in which the processor was added to the queue. Data is {e.value}. "
+                     f"Index is {index}", pid=os.getpid())
         retry_queue.put(index)
 
 

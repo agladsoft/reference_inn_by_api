@@ -34,19 +34,29 @@ PREFIX_TEMPLATE: dict = {
     '15': "не_найдено_результатов_"
 }
 
+
+class CustomAdapter(logging.LoggerAdapter):
+    def process(self, msg, kwargs):
+        my_context = kwargs.pop('pid', self.extra['pid'])
+        return f'[{my_context}] {msg}', kwargs
+
+
+logging.basicConfig(
+    filename=f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging/"
+             f"logging_{datetime.datetime.now().date()}.log",
+    level=logging.DEBUG,
+    format="[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s",
+    datefmt="%d/%B/%Y %H:%M:%S")
+
 if not os.path.exists(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging"):
     os.mkdir(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging")
-
-json_handler: logging.FileHandler = logging.FileHandler(
-    filename=f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging/"
-             f"logging_{datetime.datetime.now().date()}.log")
-
 logger: logging.getLogger = logging.getLogger("file_handler")
 if logger.hasHandlers():
     logger.handlers.clear()
-logger.addHandler(json_handler)
+logger = CustomAdapter(logger, {"pid": None})
 logger.setLevel(logging.INFO)
 logger.info(f'{os.path.basename(__file__)} {datetime.datetime.now()}')
+
 
 console_out: logging.StreamHandler = logging.StreamHandler()
 logger_stream: logging.getLogger = logging.getLogger("stream")
