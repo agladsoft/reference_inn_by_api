@@ -2,7 +2,7 @@ import os
 import logging
 import datetime
 
-WORKER_COUNT: int = 4
+WORKER_COUNT: int = 1
 
 USER_XML_RIVER: str = "6390"
 KEY_XML_RIVER: str = "e3b3ac2908b2a9e729f1671218c85e12cfe643b0"

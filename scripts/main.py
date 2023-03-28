@@ -67,7 +67,8 @@ class ReferenceInn(object):
             translated: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500])
         data['is_inn_found_auto'] = True
         data['company_name_rus'] = translated
-        inn, company_name = provider.get_inn_from_cache(inn, index)
+        inn, company_name = provider.get_company_name_from_cache(inn, index)
+        logger.info(f"Unified company is {company_name}. INN is {inn}", pid=os.getpid())
         data["company_inn"] = inn
         company_name: str = re.sub(" +", " ", company_name)
         data["company_name_unified"] = company_name
@@ -75,6 +76,7 @@ class ReferenceInn(object):
         fuzz_company_name: int = fuzz.partial_ratio(company_name.upper(), translated.upper())
         fuzz_company_name = self.compare_different_fuzz(company_name, translated, fuzz_company_name, data)
         data['confidence_rate'] = fuzz_company_name
+        logger.info(f"Data was written successfully to the file. Data is {sentence}", pid=os.getpid())
 
     def get_company_name_by_sentence(self, provider: SearchEngineParser, sentence: str, index: int,
                                      is_english: bool = False) -> Tuple[str, str]:
@@ -86,14 +88,14 @@ class ReferenceInn(object):
         sentence: str = sentence.translate({ord(c): " " for c in r".,!@#$%^&*()[]{};?\|~=_+"})
         if is_english:
             sentence = sentence.replace('"', "")
-            inn, translated = provider.get_inn_from_cache(sentence, index)
+            inn, translated = provider.get_company_name_from_cache(sentence, index)
             return inn, translated
         sentence = self.replace_quotes(sentence, replaced_str=' ')
         sentence = re.sub(" +", " ", sentence).strip() + sign
         translated: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500])
         translated = self.replace_quotes(translated, quotes=['"', '«', '»', sign], replaced_str=' ')
         translated = re.sub(" +", " ", translated).strip()
-        inn, translated = provider.get_inn_from_cache(translated, index)
+        inn, translated = provider.get_company_name_from_cache(translated, index)
         return inn, translated
 
     def find_international_company(self, cache_inn: LegalEntitiesParser, sentence: str, data: dict, index: int) -> None:

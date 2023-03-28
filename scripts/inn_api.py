@@ -46,7 +46,7 @@ class LegalEntitiesParser(object):
         return "Данные записываются в кэш", api_inn, api_name
 
     @staticmethod
-    def get_inn_by_api(value: str, _id: str, var_api_name: str = None) -> Union[Tuple[Union[str, None], str]]:
+    def get_company_name_from_legal_entities_parser(value: str, _id: str, var_api_name: str = None) -> Union[Tuple[Union[str, None], str]]:
         """
         Looking for a company name unified from the website of legal entities.
         """
@@ -69,11 +69,12 @@ class LegalEntitiesParser(object):
                     break
             if page_name:
                 var_api_name = page_name.text.strip()
+                logger.info(f"Unified company is {var_api_name}. INN is {value}", pid=os.getpid())
             return value if value != 'None' else None, var_api_name
         except (IndexError, ValueError, TypeError):
             return value if value != 'None' else None, var_api_name
 
-    def get_inn_from_cache(self, inn: str, index: int) -> Tuple[Union[str, None], Union[str, None]]:
+    def get_company_name_from_cache(self, inn: str, index: int) -> Tuple[Union[str, None], Union[str, None]]:
         """
         Getting the company name unified from the cache, if there is one.
         Otherwise, we are looking for verification of legal entities on websites.
@@ -87,9 +88,9 @@ class LegalEntitiesParser(object):
             api_inn, api_name = None, None
             if key != 'None':
                 if len(key) == 10:
-                    api_inn, api_name = self.get_inn_by_api(key, 'clip_inn')
+                    api_inn, api_name = self.get_company_name_from_legal_entities_parser(key, 'clip_inn')
                 elif len(key) == 12:
-                    api_inn, api_name = self.get_inn_by_api(key, 'req_inn')
+                    api_inn, api_name = self.get_company_name_from_legal_entities_parser(key, 'req_inn')
             if api_inn is not None and api_name is not None:
                 self.cache_add_and_save(api_inn, api_name)
                 break
@@ -178,7 +179,7 @@ class SearchEngineParser(LegalEntitiesParser):
                                       f"Exception - {ex}")
         return max(dict_inn, key=dict_inn.get) if dict_inn else "None"
 
-    def get_inn_from_cache(self, value: str, index: int) -> Tuple[str, str]:
+    def get_company_name_from_cache(self, value: str, index: int) -> Tuple[str, str]:
         """
         Getting the INN from the cache, if there is one. Otherwise, we search in the search engine.
         """
