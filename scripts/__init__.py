@@ -44,9 +44,9 @@ class CustomAdapter(logging.LoggerAdapter):
 logging.basicConfig(
     filename=f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging/"
              f"logging_{datetime.datetime.now().date()}.log",
-    level=logging.DEBUG,
     format="[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s",
-    datefmt="%d/%B/%Y %H:%M:%S")
+    datefmt="%d/%B/%Y %H:%M:%S"
+)
 
 if not os.path.exists(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging"):
     os.mkdir(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging")
@@ -55,7 +55,7 @@ if logger.hasHandlers():
     logger.handlers.clear()
 logger = CustomAdapter(logger, {"pid": None})
 logger.setLevel(logging.INFO)
-logger.info(f'{os.path.basename(__file__)} {datetime.datetime.now()}')
+logger.info(f'{os.path.basename(__file__)}')
 
 
 console_out: logging.StreamHandler = logging.StreamHandler()
