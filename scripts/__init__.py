@@ -23,8 +23,8 @@ COUNTRIES_AND_CITIES: list = ["UZBEKISTAN", "KAZAKHSTAN", "BELARUS", "POLAND", "
                               "KOKAND", "GEORGEN AM WALDE", "SAMARKAND", "KARMANA", "MINSK"]
 
 MESSAGE_TEMPLATE: dict = {
-    '200': "Error: the money ran out. Index is {}. Exception - {}. Value - {}",
-    '110': "Error: there are no free channels for data collection. Index is {}. Exception - {}. Value - {}",
+    '200': "The money ran out. Index is {}. Exception - {}. Value - {}",
+    '110': "There are no free channels for data collection. Index is {}. Exception - {}. Value - {}",
     '15': "No results found in the search engine. Index is {}. Exception - {}. Value - {}"
 }
 

@@ -97,7 +97,7 @@ class LegalEntitiesParser(object):
                 logger.error(f"Not found inn {api_inn} in rusprofile. Index is {index}. Unified company name is "
                              f"{api_name}", pid=os.getpid())
                 logger_stream.error(f"Not found inn {api_inn} in rusprofile. Index is {index}."
-                                    f" Unified company name is {api_name}", pid=os.getpid())
+                                    f" Unified company name is {api_name}")
         return api_inn, api_name
 
 
@@ -108,7 +108,7 @@ class SearchEngineParser(LegalEntitiesParser):
         """
         Recording logs.
         """
-        logger.error(message)
+        logger.error(message, pid=os.getpid())
         logger_stream.error(f"{prefix}")
 
     @staticmethod
@@ -175,7 +175,7 @@ class SearchEngineParser(LegalEntitiesParser):
                 logger.warning(
                     f"Description {value} not found in the Yandex. Index is {index}. Exception - {ex}", pid=os.getpid())
                 logger_stream.warning(f"Description {value} not found in the Yandex. Index is {index}. "
-                                      f"Exception - {ex}", pid=os.getpid())
+                                      f"Exception - {ex}")
         return max(dict_inn, key=dict_inn.get) if dict_inn else "None"
 
     def get_inn_from_cache(self, value: str, index: int) -> Tuple[str, str]:

@@ -150,11 +150,11 @@ class ReferenceInn(object):
                 logger.error(f'Not found inn in Yandex. Data is {index, sentence} (most likely a foreign company). '
                              f'Exception - {ex}', pid=os.getpid())
                 logger_stream.error(f'Not found inn in Yandex. Data is {index, sentence} (most likely a foreign company).'
-                                    f' Exception - {ex}', pid=os.getpid())
+                                    f' Exception - {ex}')
             except exceptions.TooManyRequests as ex_translator:
                 error_message = f'Too many requests to the translator. Exception - {ex_translator}'
                 logger.error(error_message, pid=os.getpid())
-                logger_stream.error(f'много_запросов_к_переводчику_на_строке_{index}', pid=os.getpid())
+                logger_stream.error(f'много_запросов_к_переводчику_на_строке_{index}')
                 raise AssertionError(error_message) from ex_translator
         self.write_to_json(index, data)
 
