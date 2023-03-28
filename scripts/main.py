@@ -68,7 +68,6 @@ class ReferenceInn(object):
         data['is_inn_found_auto'] = True
         data['company_name_rus'] = translated
         inn, company_name = provider.get_company_name_from_cache(inn, index)
-        logger.info(f"Unified company is {company_name}. INN is {inn}", pid=os.getpid())
         data["company_inn"] = inn
         company_name: str = re.sub(" +", " ", company_name)
         data["company_name_unified"] = company_name
@@ -76,7 +75,7 @@ class ReferenceInn(object):
         fuzz_company_name: int = fuzz.partial_ratio(company_name.upper(), translated.upper())
         fuzz_company_name = self.compare_different_fuzz(company_name, translated, fuzz_company_name, data)
         data['confidence_rate'] = fuzz_company_name
-        logger.info(f"Data was written successfully to the file. Data is {sentence}", pid=os.getpid())
+        logger.info(f"Data was written successfully to the dictionary. Data is {sentence}", pid=os.getpid())
 
     def get_company_name_by_sentence(self, provider: SearchEngineParser, sentence: str, index: int,
                                      is_english: bool = False) -> Tuple[str, str]:
@@ -134,11 +133,11 @@ class ReferenceInn(object):
         """
         Writing data to json.
         """
-        logger.info(f'{index} index. Data is {data}', pid=os.getpid())
         basename: str = os.path.basename(self.filename)
         output_file_path: str = os.path.join(self.directory, f'{basename}_{index}.json')
         with open(f"{output_file_path}", 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
+            logger.info(f"Data was written successfully to the file. Index is {index}. Data is {data}", pid=os.getpid())
 
     def parse_data(self, index: int, data: dict) -> None:
         """
