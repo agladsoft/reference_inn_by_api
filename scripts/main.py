@@ -208,6 +208,7 @@ if __name__ == "__main__":
     pool: Pool
     procs: list = []
     reference_inn: ReferenceInn = ReferenceInn(os.path.abspath(sys.argv[1]), sys.argv[2])
+    logger.info(f'File is {os.path.basename(sys.argv[1])}')
     path: str = reference_inn.create_file_for_cache()
     conn: Connection = sqlite3.connect(path)
     parsed_data: List[dict] = reference_inn.convert_csv_to_dict()

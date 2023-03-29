@@ -55,7 +55,6 @@ if logger.hasHandlers():
     logger.handlers.clear()
 logger = CustomAdapter(logger, {"pid": None})
 logger.setLevel(logging.INFO)
-logger.info(f'{os.path.basename(__file__)}')
 
 
 console_out: logging.StreamHandler = logging.StreamHandler()
