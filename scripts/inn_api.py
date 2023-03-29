@@ -96,9 +96,9 @@ class LegalEntitiesParser(object):
                 self.cache_add_and_save(api_inn, api_name)
                 break
             else:
-                logger.error(f"Not found inn {api_inn} in rusprofile. Index is {index}. Unified company name is "
+                logger.error(f"Not found INN {api_inn} in rusprofile. Index is {index}. Unified company name is "
                              f"{api_name}", pid=os.getpid())
-                logger_stream.error(f"Not found inn {api_inn} in rusprofile. Index is {index}."
+                logger_stream.error(f"Not found INN {api_inn} in rusprofile. Index is {index}."
                                     f" Unified company name is {api_name}")
         return api_inn, api_name
 
