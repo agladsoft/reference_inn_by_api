@@ -83,7 +83,7 @@ class LegalEntitiesParser(object):
         api_name: Union[str, None]
         rows: sqlite3.Cursor = self.cur.execute(f"SELECT * FROM {self.table_name} WHERE key = {inn}")
         if list_rows := list(rows):
-            logger.info(f"Unified company is {list_rows[0][0]}. INN is {list_rows[0][1]}", pid=os.getpid())
+            logger.info(f"Unified company is {list_rows[0][1]}. INN is {list_rows[0][0]}", pid=os.getpid())
             return list_rows[0][0], list_rows[0][1]
         for key in [inn]:
             api_inn, api_name = None, None
