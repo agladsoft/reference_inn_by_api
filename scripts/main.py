@@ -191,6 +191,19 @@ class ReferenceInn(object):
         return dataframe.to_dict('records')
 
 
+def handle_queue(e: Any) -> None:
+    """
+    Write data to file from queue.
+    """
+    if type(e) is AssertionError:
+        pool.terminate()
+    elif type(e) is MyError:
+        data_queue: dict = parsed_data[e.index - 2]
+        data_queue['original_file_name'] = os.path.basename(sys.argv[1])
+        data_queue['original_file_parsed_on'] = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        ReferenceInn(os.path.abspath(sys.argv[1]), sys.argv[2]).write_to_json(e.index, data_queue)
+
+
 def handle_errors(e: Any) -> None:
     """
     Interrupt all processors in case of an error or adding in the queue.
@@ -199,16 +212,17 @@ def handle_errors(e: Any) -> None:
         pool.terminate()
     elif type(e) is MyError:
         index: int = e.index
-        logger.error(f"An error occured in which the processor was added to the queue. Data is {e.value}. "
-                     f"Index is {index}", pid=os.getpid())
+        logger.error(f"An error occured in which the processor was added to the queue. Index is {index}. "
+                     f"Data is {e.value}", pid=os.getpid())
         retry_queue.put(index)
 
 
 if __name__ == "__main__":
     pool: Pool
     procs: list = []
-    reference_inn: ReferenceInn = ReferenceInn(os.path.abspath(sys.argv[1]), sys.argv[2])
+    logger.info("The script has started its work")
     logger.info(f'File is {os.path.basename(sys.argv[1])}')
+    reference_inn: ReferenceInn = ReferenceInn(os.path.abspath(sys.argv[1]), sys.argv[2])
     path: str = reference_inn.create_file_for_cache()
     conn: Connection = sqlite3.connect(path)
     parsed_data: List[dict] = reference_inn.convert_csv_to_dict()
@@ -220,14 +234,18 @@ if __name__ == "__main__":
         pool.close()
         pool.join()
 
+        logger.info(f"All rows have been processed. Is the queue empty? {retry_queue.empty()}")
+
         if not retry_queue.empty():
             time.sleep(120)
-            logger.error("Processing of processes that are in the queue")
+            logger.info("Processing of processes that are in the queue")
             with Pool(processes=WORKER_COUNT) as _pool:
                 while not retry_queue.empty():
                     index_queue = retry_queue.get()
-                    _pool.apply_async(reference_inn.parse_data, (index_queue, parsed_data[index_queue - 2]))
+                    _pool.apply_async(reference_inn.parse_data, (index_queue, parsed_data[index_queue - 2]),
+                                      error_callback=handle_queue)
                 _pool.close()
                 _pool.join()
 
     conn.close()
+    logger.info("The script has completed its work")
