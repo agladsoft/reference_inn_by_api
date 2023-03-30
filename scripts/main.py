@@ -190,31 +190,30 @@ class ReferenceInn(object):
         dataframe['confidence_rate'] = None
         return dataframe.to_dict('records')
 
+    def handle_queue(self, e: Any) -> None:
+        """
+        Write data to file from queue.
+        """
+        if type(e) is AssertionError:
+            pool.terminate()
+        elif type(e) is MyError:
+            data_queue: dict = parsed_data[e.index - 2]
+            data_queue['original_file_name'] = os.path.basename(self.filename)
+            data_queue['original_file_parsed_on'] = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            self.write_to_json(e.index, data_queue)
 
-def handle_queue(e: Any) -> None:
-    """
-    Write data to file from queue.
-    """
-    if type(e) is AssertionError:
-        pool.terminate()
-    elif type(e) is MyError:
-        data_queue: dict = parsed_data[e.index - 2]
-        data_queue['original_file_name'] = os.path.basename(sys.argv[1])
-        data_queue['original_file_parsed_on'] = str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        ReferenceInn(os.path.abspath(sys.argv[1]), sys.argv[2]).write_to_json(e.index, data_queue)
-
-
-def handle_errors(e: Any) -> None:
-    """
-    Interrupt all processors in case of an error or adding in the queue.
-    """
-    if type(e) is AssertionError:
-        pool.terminate()
-    elif type(e) is MyError:
-        index: int = e.index
-        logger.error(f"An error occured in which the processor was added to the queue. Index is {index}. "
-                     f"Data is {e.value}", pid=os.getpid())
-        retry_queue.put(index)
+    @staticmethod
+    def handle_errors(e: Any) -> None:
+        """
+        Interrupt all processors in case of an error or adding in the queue.
+        """
+        if type(e) is AssertionError:
+            pool.terminate()
+        elif type(e) is MyError:
+            index: int = e.index
+            logger.error(f"An error occured in which the processor was added to the queue. Index is {index}. "
+                         f"Data is {e.value}", pid=os.getpid())
+            retry_queue.put(index)
 
 
 if __name__ == "__main__":
@@ -230,7 +229,7 @@ if __name__ == "__main__":
     with Pool(processes=WORKER_COUNT) as pool:
         retry_queue: Queue = Queue()
         for i, dict_data in enumerate(parsed_data, 2):
-            pool.apply_async(reference_inn.parse_data, (i, dict_data), error_callback=handle_errors)
+            pool.apply_async(reference_inn.parse_data, (i, dict_data), error_callback=reference_inn.handle_errors)
         pool.close()
         pool.join()
 
@@ -243,7 +242,7 @@ if __name__ == "__main__":
                 while not retry_queue.empty():
                     index_queue = retry_queue.get()
                     _pool.apply_async(reference_inn.parse_data, (index_queue, parsed_data[index_queue - 2]),
-                                      error_callback=handle_queue)
+                                      error_callback=reference_inn.handle_queue)
                 _pool.close()
                 _pool.join()
 
