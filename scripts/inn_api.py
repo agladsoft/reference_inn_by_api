@@ -1,7 +1,6 @@
 import os
 import re
 import sqlite3
-import requests
 import contextlib
 import validate_inn
 from requests import Response
@@ -160,8 +159,8 @@ class SearchEngineParser(LegalEntitiesParser):
         try:
             r: Response = session.get(f"https://xmlriver.com/search_yandex/xml?user={USER_XML_RIVER}"
                                       f"&key={KEY_XML_RIVER}&query={value} ИНН", timeout=120)
-        except requests.exceptions.ReadTimeout as e:
-            raise MyError(f"Run time out. Index is {index}. Value - {value}", value, index) from e
+        except Exception as e:
+            raise MyError(f"Run time out. Index is {index}. Exception is {e}. Value - {value}", value, index) from e
         logger.info(f"After request. Data is {value}", pid=os.getpid())
         xml_code: str = r.html.html
         myroot: ElemTree = ElemTree.fromstring(xml_code)
