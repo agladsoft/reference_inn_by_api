@@ -45,7 +45,8 @@ class LegalEntitiesParser(object):
         return "Данные записываются в кэш", api_inn, api_name
 
     @staticmethod
-    def get_company_name_from_legal_entities_parser(value: str, _id: str, var_api_name: str = None) -> Union[Tuple[Union[str, None], str]]:
+    def get_company_name_from_legal_entities_parser(value: str, _id: str, var_api_name: str = None) -> \
+            Union[Tuple[Union[str, None], str]]:
         """
         Looking for a company name unified from the website of legal entities.
         """
@@ -189,6 +190,7 @@ class SearchEngineParser(LegalEntitiesParser):
         )
         list_rows: list = list(rows)
         if list_rows and list_rows[0][1] != "None":
+            logger.info(f"Data is {list_rows[0][0]}. INN is {list_rows[0][1]}", pid=os.getpid())
             return list_rows[0][1], list_rows[0][0]
         for key in [value]:
             api_inn: str = self.get_inn_from_search_engine(key, index)
