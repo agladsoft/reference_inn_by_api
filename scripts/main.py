@@ -68,6 +68,7 @@ class ReferenceInn(object):
         data['is_inn_found_auto'] = True
         data['company_name_rus'] = translated
         inn, company_name = provider.get_company_name_from_cache(inn, index)
+        logger.info(f"Transleted is {translated}. Index is {index}", pid=os.getpid())
         data["company_inn"] = inn
         company_name: str = re.sub(" +", " ", company_name)
         data["company_name_unified"] = company_name
@@ -114,6 +115,7 @@ class ReferenceInn(object):
         2). inn search in yandex by request -> company search by inn.
         """
         list_inn: list = []
+        logger.info(f"Processing of a row with index {index} begins. Data is {sentence}", pid=os.getpid())
         all_list_inn: list = re.findall(r"\d+", sentence)
         cache_inn: LegalEntitiesParser = LegalEntitiesParser("inn_and_uni_company_name", conn)
         for item_inn in all_list_inn:
@@ -150,8 +152,8 @@ class ReferenceInn(object):
             except (IndexError, ValueError, TypeError, sqlite3.OperationalError) as ex:
                 logger.error(f'Not found inn INN Yandex. Data is {index, sentence} (most likely a foreign company). '
                              f'Exception - {ex}', pid=os.getpid())
-                logger_stream.error(f'Not found INN in Yandex. Data is {index, sentence} (most likely a foreign company).'
-                                    f' Exception - {ex}')
+                logger_stream.error(f'Not found INN in Yandex. Data is {index, sentence} '
+                                    f'(most likely a foreign company). Exception - {ex}')
             except exceptions.TooManyRequests as ex_translator:
                 error_message = f'Too many requests to the translator. Exception - {ex_translator}'
                 logger.error(error_message, pid=os.getpid())
