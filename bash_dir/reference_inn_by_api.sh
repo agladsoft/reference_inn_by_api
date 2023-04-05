@@ -22,7 +22,6 @@ find "${xls_path}" -maxdepth 1 -type f \( -name "*.xls*" -or -name "*.XLS*" \) !
 do
   if [[ "${file}" == *"error_"* ]];
   then
-    echo "Contains an error in ${file}"
     continue
   fi
 
@@ -55,12 +54,16 @@ do
 	fi
 
 	# Will convert csv to json
-	python3 ${XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS}/scripts_for_bash_with_inheritance/reference_inn_by_api.py "${csv_name}" "${json_path}"
+	exit_message=$(python3 ${XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS}/scripts/main.py "${csv_name}" "${json_path}" 2>&1 > /dev/null)
 
-  if [ $? -eq 0 ]
+  exit_code=$?
+  echo "Exit code ${exit_code}"
+  echo "Exit message ${exit_message}"
+  if [[ ${exit_code} == 0 ]]
 	then
 	  mv "${csv_name}" "${done_path}"
 	else
-	  mv "${csv_name}" "${xls_path}/error_$(basename "${csv_name}")"
+    mv "${csv_name}" "${xls_path}/error_${exit_message}_$(basename "${csv_name}")"
 	fi
+
 done
