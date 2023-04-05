@@ -239,7 +239,7 @@ if __name__ == "__main__":
 
         if not retry_queue.empty():
             time.sleep(120)
-            logger.info("Processing of processes that are in the queue")
+            logger.info(f"Processing of processes that are in the queue. Size queue is {retry_queue.qsize()}")
             with Pool(processes=WORKER_COUNT) as _pool:
                 while not retry_queue.empty():
                     index_queue = retry_queue.get()
