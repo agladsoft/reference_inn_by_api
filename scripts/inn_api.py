@@ -3,12 +3,14 @@ import re
 import sqlite3
 import contextlib
 import validate_inn
+from dadata import Dadata
 from requests import Response
 from typing import Union, Tuple
 from requests_html import HTMLSession
 import xml.etree.ElementTree as ElemTree
 from bs4 import BeautifulSoup, Tag, ResultSet
-from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE
+from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE, \
+    TOKEN_DADATA
 
 
 class MyError(Exception):
@@ -74,7 +76,21 @@ class LegalEntitiesParser(object):
         except (IndexError, ValueError, TypeError):
             return value if value != 'None' else None, var_api_name
 
-    def get_company_name_from_cache(self, inn: str, index: int) -> Tuple[Union[str, None], Union[str, None]]:
+    @staticmethod
+    def get_company_name_from_dadata(value: str, dadata_name: str = None) -> Union[str, None]:
+        """
+        Looking for a company name unified from the website of legal entities.
+        """
+        try:
+            logger.info(f"Before request. Data is {value}", pid=os.getpid())
+            dadata = Dadata(TOKEN_DADATA)
+            dadata_inn = dadata.find_by_id("party", value)[0]
+            return dadata_inn['value']
+        except (IndexError, ValueError, TypeError):
+            return dadata_name
+
+    def get_company_name_from_cache(self, inn: str, index: int) -> \
+            Tuple[Union[str, None], Union[str, None], Union[str, None]]:
         """
         Getting the company name unified from the cache, if there is one.
         Otherwise, we are looking for verification of legal entities on websites.
@@ -82,9 +98,10 @@ class LegalEntitiesParser(object):
         api_inn: Union[str, None]
         api_name: Union[str, None]
         rows: sqlite3.Cursor = self.cur.execute(f"SELECT * FROM {self.table_name} WHERE key = {inn}")
+        api_name_dadata = self.get_company_name_from_dadata(inn)
         if list_rows := list(rows):
             logger.info(f"Unified company is {list_rows[0][1]}. INN is {list_rows[0][0]}", pid=os.getpid())
-            return list_rows[0][0], list_rows[0][1]
+            return list_rows[0][0], list_rows[0][1], api_name_dadata
         for key in [inn]:
             api_inn, api_name = None, None
             if key != 'None':
@@ -100,7 +117,7 @@ class LegalEntitiesParser(object):
                              f"{api_name}", pid=os.getpid())
                 logger_stream.error(f"Not found INN {api_inn} in rusprofile. Index is {index}."
                                     f" Unified company name is {api_name}")
-        return api_inn, api_name
+        return api_inn, api_name, api_name_dadata
 
 
 class SearchEngineParser(LegalEntitiesParser):

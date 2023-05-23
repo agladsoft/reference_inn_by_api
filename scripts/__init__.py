@@ -7,6 +7,8 @@ WORKER_COUNT: int = 4
 USER_XML_RIVER: str = "6390"
 KEY_XML_RIVER: str = "e3b3ac2908b2a9e729f1671218c85e12cfe643b0"
 
+TOKEN_DADATA = "6563fd1ad7d12797dc2eb47285547e1d25c5af0e"
+
 REPLACED_QUOTES: list = ["<", ">", "«", "»", "’", "‘", "“", "”", "`", "'", '"']
 
 REPLACED_WORDS: list = ["ООО", "OOO", "OОO", "ОOО", "OOО", "ООO", "ОАО", "ИП", "ЗАО", "3АО", "АО"]
