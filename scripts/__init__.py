@@ -24,6 +24,8 @@ COUNTRIES_AND_CITIES: list = ["UZBEKISTAN", "KAZAKHSTAN", "BELARUS", "POLAND", "
                               "KYRGYZSTAN", "NUR-SULTA", "KYRGYZ REPUBLIC", "TAJIKISTAN", "KILINSKIEGO", "LATVIA",
                               "KOKAND", "GEORGEN AM WALDE", "SAMARKAND", "KARMANA", "MINSK"]
 
+COUNTRY_KAZAKHSTAN = ["KAZAKHSTAN ", "ALMATY", "+7727", "(727)", " BIN "]
+
 MESSAGE_TEMPLATE: dict = {
     '200': "The money ran out. Index is {}. Exception - {}. Value - {}",
     '110': "There are no free channels for data collection. Index is {}. Exception - {}. Value - {}",

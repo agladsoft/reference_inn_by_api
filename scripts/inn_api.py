@@ -98,7 +98,7 @@ class LegalEntitiesParser(object):
         api_inn: Union[str, None]
         api_name: Union[str, None]
         rows: sqlite3.Cursor = self.cur.execute(f"SELECT * FROM {self.table_name} WHERE key = {inn}")
-        api_name_dadata = self.get_company_name_from_dadata(inn)
+        api_name_dadata = self.get_company_name_from_dadata(inn) if inn.isdigit() else None
         if list_rows := list(rows):
             logger.info(f"Unified company is {list_rows[0][1]}. INN is {list_rows[0][0]}", pid=os.getpid())
             return list_rows[0][0], list_rows[0][1], api_name_dadata
