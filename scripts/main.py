@@ -64,7 +64,7 @@ class ReferenceInn(object):
         on the website https://www.rusprofile.ru/.
         """
         if not translated:
-            translated: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500])
+            translated: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500] + " ")
         data['is_inn_found_auto'] = True
         data['company_name_rus'] = translated
         inn, company_name, company_name_dadata = provider.get_company_name_from_cache(inn, index)
@@ -150,7 +150,7 @@ class ReferenceInn(object):
         for key, sentence in data.items():
             try:
                 if key == 'company_name':
-                    self.get_inn_from_row(sentence, data, index)
+                    self.get_inn_from_row(str(sentence), data, index)
             except (IndexError, ValueError, TypeError, sqlite3.OperationalError) as ex:
                 logger.error(f'Not found inn INN Yandex. Data is {index, sentence} (most likely a foreign company). '
                              f'Exception - {ex}', pid=os.getpid())
@@ -179,7 +179,7 @@ class ReferenceInn(object):
         """
         Csv data representation in json.
         """
-        dataframe: TextFileReader | DataFrame = pd.read_csv(self.filename)
+        dataframe: TextFileReader | DataFrame = pd.read_csv(self.filename, dtype=str)
         dataframe.columns = ['company_name']
         # dataframe = dataframe.drop_duplicates(subset='company_name', keep="first")
         dataframe = dataframe.replace({np.nan: None})
