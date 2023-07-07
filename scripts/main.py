@@ -197,6 +197,7 @@ class ReferenceInn(object):
         Write data to file from queue.
         """
         if type(e) is AssertionError:
+            error_flag.value = 1
             pool.terminate()
         elif type(e) is MyError:
             data_queue: dict = parsed_data[e.index - 2]
