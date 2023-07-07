@@ -13,8 +13,8 @@ from fuzzywuzzy import fuzz
 from pandas import DataFrame
 from sqlite3 import Connection
 from typing import List, Tuple, Any
-from multiprocessing import Pool, Queue
 from pandas.io.parsers import TextFileReader
+from multiprocessing import Pool, Queue, Value
 from deep_translator import GoogleTranslator, exceptions
 from inn_api import LegalEntitiesParser, SearchEngineParser, MyError
 
@@ -199,6 +199,7 @@ class ReferenceInn(object):
         Write data to file from queue.
         """
         if type(e) is AssertionError:
+            error_flag.value = 1
             pool.terminate()
         elif type(e) is MyError:
             data_queue: dict = parsed_data[e.index - 2]
@@ -212,6 +213,7 @@ class ReferenceInn(object):
         Interrupt all processors in case of an error or adding in the queue.
         """
         if type(e) is AssertionError:
+            error_flag.value = 1
             pool.terminate()
         elif type(e) is MyError:
             index: int = e.index
@@ -229,7 +231,7 @@ if __name__ == "__main__":
     path: str = reference_inn.create_file_for_cache()
     conn: Connection = sqlite3.connect(path)
     parsed_data: List[dict] = reference_inn.convert_csv_to_dict()
-
+    error_flag = Value('i', 0)
     with Pool(processes=WORKER_COUNT) as pool:
         retry_queue: Queue = Queue()
         for i, dict_data in enumerate(parsed_data, 2):
@@ -249,6 +251,9 @@ if __name__ == "__main__":
                                       error_callback=reference_inn.handle_queue)
                 _pool.close()
                 _pool.join()
+
+        if error_flag.value == 1:
+            sys.exit(1)
 
     conn.close()
     logger.info("The script has completed its work")
