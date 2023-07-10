@@ -217,7 +217,7 @@ class SearchEngineParser(LegalEntitiesParser):
             with contextlib.suppress(Exception):
                 if list_rows[0][1] == 'None':
                     sql_update_query: str = f"""Update {self.table_name} set value = ? where key = ?"""
-                    data: tuple[str, str] = (api_inn, value)
+                    data: Tuple[str, str] = (api_inn, value)
                     self.cur.execute(sql_update_query, data)
                     self.conn.commit()
             self.cache_add_and_save(value, api_inn)
