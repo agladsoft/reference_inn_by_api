@@ -73,20 +73,23 @@ class LegalEntitiesParser(object):
                 var_api_name = page_name.text.strip()
                 logger.info(f"Unified company is {var_api_name}. INN is {value}", pid=os.getpid())
             return value if value != 'None' else None, var_api_name
-        except (IndexError, ValueError, TypeError):
+        except Exception as e:
+            logger.info(f"Unified company is {var_api_name}. Exception is {e}. Value - {value}")
             return value if value != 'None' else None, var_api_name
 
     @staticmethod
-    def get_company_name_from_dadata(value: str, dadata_name: str = None) -> Union[str, None]:
+    def get_company_name_from_dadata(inn: str, dadata_name: str = None) -> Union[str, None]:
         """
         Looking for a company name unified from the website of legal entities.
         """
         try:
-            logger.info(f"Before request. Data is {value}", pid=os.getpid())
+            logger.info(f"Before request. Data is {inn}", pid=os.getpid())
             dadata = Dadata(TOKEN_DADATA)
-            dadata_inn = dadata.find_by_id("party", value)[0]
+            logger.info(f"After request. Data is {inn}", pid=os.getpid())
+            dadata_inn = dadata.find_by_id("party", inn)[0]
             return dadata_inn['value']
-        except (IndexError, ValueError, TypeError):
+        except Exception as e:
+            logger.info(f"Dadata {dadata_name}. Exception is {e}. Value - {inn}")
             return dadata_name
 
     def get_company_name_from_cache(self, inn: str, index: int) -> \
