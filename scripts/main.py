@@ -12,7 +12,7 @@ from pathlib import Path
 from fuzzywuzzy import fuzz
 from pandas import DataFrame
 from sqlite3 import Connection
-from typing import List, Tuple, Any
+from typing import List, Tuple, Any, Union
 from pandas.io.parsers import TextFileReader
 from multiprocessing import Pool, Queue, Value
 from deep_translator import GoogleTranslator, exceptions
@@ -99,7 +99,7 @@ class ReferenceInn(object):
         inn, translated = provider.get_company_name_from_cache(translated, index)
         return inn, translated
 
-    def is_find_foreign_company(self, cache_inn: LegalEntitiesParser, sentence: str, data: dict, index: int) -> bool:
+    def is_find_foreign_company(self, cache_inn: LegalEntitiesParser, sentence: str, data: dict, index: int) -> None:
         """
         Search for international companies.
         """
@@ -179,7 +179,7 @@ class ReferenceInn(object):
         """
         Csv data representation in json.
         """
-        dataframe: TextFileReader | DataFrame = pd.read_csv(self.filename, dtype=str)
+        dataframe: Union[TextFileReader, DataFrame] = pd.read_csv(self.filename, dtype=str)
         dataframe.columns = ['company_name']
         # dataframe = dataframe.drop_duplicates(subset='company_name', keep="first")
         dataframe = dataframe.replace({np.nan: None})
