@@ -1,16 +1,14 @@
-import os
 import re
 import sqlite3
 import requests
 import contextlib
 import validate_inn
+from __init__ import *
 from dadata import Dadata
 from requests import Response
 from typing import Union, Tuple
 from requests_html import HTMLSession
 import xml.etree.ElementTree as ElemTree
-from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE, \
-    TOKEN_DADATA
 
 
 class MyError(Exception):
@@ -47,13 +45,14 @@ class LegalEntitiesParser(object):
         return "Данные записываются в кэш", api_inn, api_name
 
     @staticmethod
-    def get_company_name_from_legal_entities_parser(value: str) -> Union[str, None]:
+    def get_company_name_from_legal_entities_parser(inn: str) -> Union[str, None]:
         """
         Looking for a company name unified from the website of legal entities.
         """
-        logger.info(f"Before request. Data is {value}", pid=os.getpid())
-        response: Response = requests.get(f'https://api.datanewton.ru/v1/counterparty?key=8kINvIWNTiTE&inn={value}')
-        logger.info(f"After request. Data is {value}", pid=os.getpid())
+        logger.info(f"Before request. Data is {inn}", pid=os.getpid())
+        response: Response = requests.get(f'https://api.datanewton.ru/v1/counterparty?key={API_KEY_DATANEWTON}&'
+                                          f'inn={inn}')
+        logger.info(f"After request. Data is {inn}", pid=os.getpid())
         if response.status_code != 200:
             logger.info(response.text, pid=os.getpid())
         json_data: dict = response.json()
@@ -89,11 +88,11 @@ class LegalEntitiesParser(object):
             logger.info(f"Unified company is {list_rows[0][1]}. INN is {list_rows[0][0]}", pid=os.getpid())
             return list_rows[0][1], api_name_dadata
         api_name: Union[str, None] = self.get_company_name_from_legal_entities_parser(inn)
-        if inn is not None and api_name is not None:
+        if api_name is not None:
             self.cache_add_and_save(inn, api_name)
         else:
-            logger.error(f"Not found INN {inn} in datanewton. Index is {index}. Unified company name is "
-                         f"{api_name}", pid=os.getpid())
+            logger.error(f"Not found company_name by INN {inn} in datanewton. Index is {index}. "
+                         f"Unified company name is {api_name}", pid=os.getpid())
         return api_name, api_name_dadata
 
 
