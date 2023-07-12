@@ -67,7 +67,7 @@ class ReferenceInn(object):
             translated: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500] + " ")
         data['is_inn_found_auto'] = True
         data['company_name_rus'] = translated
-        inn, company_name, company_name_dadata = provider.get_company_name_from_cache(inn, index)
+        company_name, company_name_dadata = provider.get_company_name_from_cache(inn, index)
         logger.info(f"Transleted is {translated}. Index is {index}", pid=os.getpid())
         data["company_inn"] = inn
         company_name: str = re.sub(" +", " ", company_name)
@@ -99,17 +99,6 @@ class ReferenceInn(object):
         inn, translated = provider.get_company_name_from_cache(translated, index)
         return inn, translated
 
-    def is_find_foreign_company(self, cache_inn: LegalEntitiesParser, sentence: str, data: dict, index: int) -> None:
-        """
-        Search for international companies.
-        """
-        for country_and_city in COUNTRY_KAZAKHSTAN:
-            if re.findall(country_and_city, sentence.upper()):
-                data["is_foreign_company"] = True
-                self.get_company_name_by_inn(cache_inn, data, inn="'None'", sentence=sentence, index=index)
-        if not data["is_foreign_company"]:
-            data["is_foreign_company"] = False
-
     def get_inn_from_row(self, sentence: str, data: dict, index: int) -> None:
         """
         Full processing of the sentence, including 1). inn search by offer -> company search by inn,
@@ -125,7 +114,6 @@ class ReferenceInn(object):
                 list_inn.append(item_inn2)
         data['original_file_name'] = os.path.basename(self.filename)
         data['original_file_parsed_on'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # self.is_find_foreign_company(cache_inn, sentence, data, index)
         if list_inn:
             self.get_company_name_by_inn(cache_inn, data, inn=list_inn[0], sentence=sentence, index=index)
         else:
@@ -189,7 +177,6 @@ class ReferenceInn(object):
         dataframe['company_inn'] = None
         dataframe['company_name_unified'] = None
         dataframe['company_name_dadata_unified'] = None
-        dataframe["is_foreign_company"] = None
         dataframe['is_inn_found_auto'] = None
         dataframe['original_file_name'] = None
         dataframe['original_file_parsed_on'] = None
