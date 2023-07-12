@@ -83,7 +83,7 @@ class LegalEntitiesParser(object):
         Getting the company name unified from the cache, if there is one.
         Otherwise, we are looking for verification of legal entities on websites.
         """
-        rows: sqlite3.Cursor = self.cur.execute(f"SELECT * FROM {self.table_name} WHERE key = {inn}")
+        rows: sqlite3.Cursor = self.cur.execute(f'SELECT * FROM "{self.table_name}" WHERE key=?', (inn,),)
         api_name_dadata = self.get_company_name_from_dadata(inn) if inn.isdigit() else None
         if list_rows := list(rows):
             logger.info(f"Unified company is {list_rows[0][1]}. INN is {list_rows[0][0]}", pid=os.getpid())
@@ -179,9 +179,7 @@ class SearchEngineParser(LegalEntitiesParser):
         """
         Getting the INN from the cache, if there is one. Otherwise, we search in the search engine.
         """
-        rows: sqlite3.Cursor = self.cur.execute(
-            f"""SELECT * FROM "{self.table_name.replace('"', '""')}" WHERE key=?""", (value,),
-        )
+        rows: sqlite3.Cursor = self.cur.execute(f'SELECT * FROM "{self.table_name}" WHERE key=?', (value,),)
         list_rows: list = list(rows)
         if list_rows and list_rows[0][1] != "None":
             logger.info(f"Data is {list_rows[0][0]}. INN is {list_rows[0][1]}", pid=os.getpid())
