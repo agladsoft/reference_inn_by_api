@@ -70,8 +70,8 @@ class LegalEntitiesParser(object):
         Looking for a company name unified from the website of legal entities.
         """
         try:
-            time.sleep(1)
             logger.info(f"Before request. Data is {inn}", pid=os.getpid())
+            time.sleep(1)
             dadata = Dadata(TOKEN_DADATA)
             logger.info(f"After request. Data is {inn}", pid=os.getpid())
             dadata_inn = dadata.find_by_id("party", inn)[0]
