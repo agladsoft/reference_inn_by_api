@@ -1,5 +1,7 @@
 import re
 import sqlite3
+import time
+
 import requests
 import contextlib
 import validate_inn
@@ -68,6 +70,7 @@ class LegalEntitiesParser(object):
         Looking for a company name unified from the website of legal entities.
         """
         try:
+            time.sleep(0.5)
             logger.info(f"Before request. Data is {inn}", pid=os.getpid())
             dadata = Dadata(TOKEN_DADATA)
             logger.info(f"After request. Data is {inn}", pid=os.getpid())
