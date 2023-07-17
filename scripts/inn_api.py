@@ -2,6 +2,8 @@ import os
 import re
 import sqlite3
 import contextlib
+import time
+
 import validate_inn
 from dadata import Dadata
 from requests import Response
@@ -84,12 +86,13 @@ class LegalEntitiesParser(object):
         """
         try:
             logger.info(f"Before request. Data is {inn}", pid=os.getpid())
+            time.sleep(0.5)
             dadata = Dadata(TOKEN_DADATA)
             logger.info(f"After request. Data is {inn}", pid=os.getpid())
             dadata_inn = dadata.find_by_id("party", inn)[0]
             return dadata_inn['value']
         except Exception as e:
-            logger.info(f"Dadata {dadata_name}. Exception is {e}. Value - {inn}")
+            logger.info(f"Dadata {dadata_name}. Exception is {e}. Value - {inn}", pid=os.getpid())
             return dadata_name
 
     def get_company_name_from_cache(self, inn: str, index: int) -> \
