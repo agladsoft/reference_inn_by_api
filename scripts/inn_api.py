@@ -71,7 +71,7 @@ class LegalEntitiesParser(object):
         """
         try:
             logger.info(f"Before request. Data is {inn}", pid=os.getpid())
-            time.sleep(1)
+            time.sleep(0.5)
             dadata = Dadata(TOKEN_DADATA)
             logger.info(f"After request. Data is {inn}", pid=os.getpid())
             dadata_inn = dadata.find_by_id("party", inn)[0]
