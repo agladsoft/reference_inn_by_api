@@ -1,9 +1,8 @@
 import os
 import re
+import time
 import sqlite3
 import contextlib
-import time
-
 import validate_inn
 from dadata import Dadata
 from requests import Response
