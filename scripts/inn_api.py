@@ -1,7 +1,6 @@
 import re
-import sqlite3
 import time
-
+import sqlite3
 import requests
 import contextlib
 import validate_inn
