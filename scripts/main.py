@@ -213,7 +213,7 @@ class ReferenceInn(object):
         if type(e) is AssertionError:
             error_flag.value = 1
             pool.terminate()
-        elif type(e) is MyError:
+        else:
             index: int = e.index
             logger.error(f"An error occured in which the processor was added to the queue. Index is {index}. "
                          f"Data is {e.value}", pid=os.getpid())
