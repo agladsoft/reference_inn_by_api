@@ -203,7 +203,7 @@ class ReferenceInn(object):
         if type(e) is AssertionError:
             error_flag.value = 1
             pool.terminate()
-        elif type(e) is MyError:
+        else:
             data_queue: dict = parsed_data[e.index - 2]
             data_queue['original_file_name'] = os.path.basename(self.filename)
             data_queue['original_file_parsed_on'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
