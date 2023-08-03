@@ -3,12 +3,14 @@ import re
 import sqlite3
 import contextlib
 import validate_inn
+from dadata import Dadata
 from requests import Response
 from typing import Union, Tuple
 from requests_html import HTMLSession
 import xml.etree.ElementTree as ElemTree
 from bs4 import BeautifulSoup, Tag, ResultSet
-from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE
+from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE, \
+    TOKEN_DADATA
 
 
 class MyError(Exception):
@@ -71,10 +73,27 @@ class LegalEntitiesParser(object):
                 var_api_name = page_name.text.strip()
                 logger.info(f"Unified company is {var_api_name}. INN is {value}", pid=os.getpid())
             return value if value != 'None' else None, var_api_name
-        except (IndexError, ValueError, TypeError):
+        except Exception as e:
+            logger.info(f"Unified company is {var_api_name}. Exception is {e}. Value - {value}")
             return value if value != 'None' else None, var_api_name
 
-    def get_company_name_from_cache(self, inn: str, index: int) -> Tuple[Union[str, None], Union[str, None]]:
+    @staticmethod
+    def get_company_name_from_dadata(inn: str, dadata_name: str = None) -> Union[str, None]:
+        """
+        Looking for a company name unified from the website of legal entities.
+        """
+        try:
+            logger.info(f"Before request. Data is {inn}", pid=os.getpid())
+            dadata = Dadata(TOKEN_DADATA)
+            logger.info(f"After request. Data is {inn}", pid=os.getpid())
+            dadata_inn = dadata.find_by_id("party", inn)[0]
+            return dadata_inn['value']
+        except Exception as e:
+            logger.info(f"Dadata {dadata_name}. Exception is {e}. Value - {inn}")
+            return dadata_name
+
+    def get_company_name_from_cache(self, inn: str, index: int) -> \
+            Tuple[Union[str, None], Union[str, None], Union[str, None]]:
         """
         Getting the company name unified from the cache, if there is one.
         Otherwise, we are looking for verification of legal entities on websites.
@@ -82,9 +101,10 @@ class LegalEntitiesParser(object):
         api_inn: Union[str, None]
         api_name: Union[str, None]
         rows: sqlite3.Cursor = self.cur.execute(f"SELECT * FROM {self.table_name} WHERE key = {inn}")
+        api_name_dadata = self.get_company_name_from_dadata(inn) if inn.isdigit() else None
         if list_rows := list(rows):
             logger.info(f"Unified company is {list_rows[0][1]}. INN is {list_rows[0][0]}", pid=os.getpid())
-            return list_rows[0][0], list_rows[0][1]
+            return list_rows[0][0], list_rows[0][1], api_name_dadata
         for key in [inn]:
             api_inn, api_name = None, None
             if key != 'None':
@@ -100,7 +120,7 @@ class LegalEntitiesParser(object):
                              f"{api_name}", pid=os.getpid())
                 logger_stream.error(f"Not found INN {api_inn} in rusprofile. Index is {index}."
                                     f" Unified company name is {api_name}")
-        return api_inn, api_name
+        return api_inn, api_name, api_name_dadata
 
 
 class SearchEngineParser(LegalEntitiesParser):
@@ -198,7 +218,7 @@ class SearchEngineParser(LegalEntitiesParser):
             with contextlib.suppress(Exception):
                 if list_rows[0][1] == 'None':
                     sql_update_query: str = f"""Update {self.table_name} set value = ? where key = ?"""
-                    data: tuple[str, str] = (api_inn, value)
+                    data: Tuple[str, str] = (api_inn, value)
                     self.cur.execute(sql_update_query, data)
                     self.conn.commit()
             self.cache_add_and_save(value, api_inn)
