@@ -161,6 +161,10 @@ class ReferenceInn(object):
                 logger.error(error_message, pid=os.getpid())
                 logger_stream.error(f'много_запросов_к_переводчику_на_строке_{index}')
                 raise AssertionError(error_message) from ex_translator
+            except Exception as ex_full:
+                logger.error(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}', pid=os.getpid())
+                raise MyError(f"Index is {index}. "
+                              f"Exception is {ex_full}. Value - {sentence}", sentence, index) from ex_full
         self.write_to_json(index, data)
 
     @staticmethod
