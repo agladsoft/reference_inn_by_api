@@ -67,12 +67,11 @@ class ReferenceInn(object):
             translated: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500] + " ")
         data['is_inn_found_auto'] = True
         data['company_name_rus'] = translated
-        inn, company_name, company_name_dadata = provider.get_company_name_from_cache(inn, index)
+        inn, company_name = provider.get_company_name_from_cache(inn, index)
         logger.info(f"Transleted is {translated}. Index is {index}", pid=os.getpid())
         data["company_inn"] = inn
         company_name: str = re.sub(" +", " ", company_name)
         data["company_name_unified"] = company_name
-        data["company_name_dadata_unified"] = company_name_dadata
         company_name = self.replace_forms_organizations(company_name)
         fuzz_company_name: int = fuzz.partial_ratio(company_name.upper(), translated.upper())
         fuzz_company_name = self.compare_different_fuzz(company_name, translated, fuzz_company_name, data)
@@ -192,7 +191,6 @@ class ReferenceInn(object):
         dataframe['company_name_unified_en'] = None
         dataframe['company_inn'] = None
         dataframe['company_name_unified'] = None
-        dataframe['company_name_dadata_unified'] = None
         dataframe["is_foreign_company"] = None
         dataframe['is_inn_found_auto'] = None
         dataframe['original_file_name'] = None
