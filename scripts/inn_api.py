@@ -147,6 +147,7 @@ class SearchEngineParser(LegalEntitiesParser):
             r: Response = session.get(f"https://xmlriver.com/search_yandex/xml?user={USER_XML_RIVER}"
                                       f"&key={KEY_XML_RIVER}&query={value} ИНН", timeout=120)
         except Exception as e:
+            logger.error(f"Run time out. Data is {value}", pid=os.getpid())
             raise MyError(f"Run time out. Index is {index}. Exception is {e}. Value - {value}", value, index) from e
         logger.info(f"After request. Data is {value}", pid=os.getpid())
         xml_code: str = r.html.html
