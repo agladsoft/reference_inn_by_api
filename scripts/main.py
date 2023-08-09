@@ -161,6 +161,10 @@ class ReferenceInn(object):
                 logger.error(error_message, pid=os.getpid())
                 logger_stream.error(f'много_запросов_к_переводчику_на_строке_{index}')
                 raise AssertionError(error_message) from ex_translator
+            except Exception as ex_full:
+                logger.error(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}', pid=os.getpid())
+                raise MyError(f"Index is {index}. "
+                              f"Exception is {ex_full}. Value - {sentence}", sentence, index) from ex_full
         self.write_to_json(index, data)
 
     @staticmethod
@@ -203,7 +207,7 @@ class ReferenceInn(object):
         if type(e) is AssertionError:
             error_flag.value = 1
             pool.terminate()
-        elif type(e) is MyError:
+        else:
             data_queue: dict = parsed_data[e.index - 2]
             data_queue['original_file_name'] = os.path.basename(self.filename)
             data_queue['original_file_parsed_on'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -217,7 +221,7 @@ class ReferenceInn(object):
         if type(e) is AssertionError:
             error_flag.value = 1
             pool.terminate()
-        elif type(e) is MyError:
+        else:
             index: int = e.index
             logger.error(f"An error occured in which the processor was added to the queue. Index is {index}. "
                          f"Data is {e.value}", pid=os.getpid())
