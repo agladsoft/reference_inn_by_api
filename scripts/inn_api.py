@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import sqlite3
 import contextlib
 import validate_inn
@@ -8,7 +9,6 @@ from requests import Response
 from typing import Union, Tuple
 from requests_html import HTMLSession
 import xml.etree.ElementTree as ElemTree
-from bs4 import BeautifulSoup, Tag, ResultSet
 from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE, \
     TOKEN_DADATA
 
@@ -47,53 +47,23 @@ class LegalEntitiesParser(object):
         return "Данные записываются в кэш", api_inn, api_name
 
     @staticmethod
-    def get_company_name_from_legal_entities_parser(value: str, _id: str, var_api_name: str = None) -> \
-            Union[Tuple[Union[str, None], str]]:
-        """
-        Looking for a company name unified from the website of legal entities.
-        """
-        try:
-            session: HTMLSession = HTMLSession()
-            logger.info(f"Before request. Data is {value}", pid=os.getpid())
-            api_inn: Response = session.get(f'https://www.rusprofile.ru/search?query={value}')
-            logger.info(f"After request. Data is {value}", pid=os.getpid())
-            html_code: str = api_inn.html.html
-            html: BeautifulSoup = BeautifulSoup(html_code, 'html.parser')
-            page_inn: Tag = html.find('span', attrs={'id': _id})
-            page_name: Tag = html.find('h1', attrs={'itemprop': 'name'})
-            page_many_inn: ResultSet = html.findAll('span', attrs={'class': 'finded-text'})
-            page_many_company: ResultSet = html.findAll("div", attrs={"class": "company-item"})
-            for inn, inn_name in zip(page_many_inn, page_many_company):
-                if not page_inn and not page_name and inn.text == value:
-                    var_api_name: str = inn_name.find("span", {"class", "finded-text"}).parent.parent.parent.parent. \
-                        find("a").text.strip()
-                    var_api_name = re.sub(" +", " ", var_api_name)
-                    break
-            if page_name:
-                var_api_name = page_name.text.strip()
-                logger.info(f"Unified company is {var_api_name}. INN is {value}", pid=os.getpid())
-            return value if value != 'None' else None, var_api_name
-        except Exception as e:
-            logger.info(f"Unified company is {var_api_name}. Exception is {e}. Value - {value}")
-            return value if value != 'None' else None, var_api_name
-
-    @staticmethod
     def get_company_name_from_dadata(inn: str, dadata_name: str = None) -> Union[str, None]:
         """
         Looking for a company name unified from the website of legal entities.
         """
         try:
             logger.info(f"Before request. Data is {inn}", pid=os.getpid())
+            time.sleep(0.5)
             dadata = Dadata(TOKEN_DADATA)
             logger.info(f"After request. Data is {inn}", pid=os.getpid())
             dadata_inn = dadata.find_by_id("party", inn)[0]
             return dadata_inn['value']
         except Exception as e:
-            logger.info(f"Dadata {dadata_name}. Exception is {e}. Value - {inn}")
+            logger.info(f"Dadata {dadata_name}. Exception is {e}. Value - {inn}", pid=os.getpid())
             return dadata_name
 
     def get_company_name_from_cache(self, inn: str, index: int) -> \
-            Tuple[Union[str, None], Union[str, None], Union[str, None]]:
+            Tuple[Union[str, None], Union[str, None]]:
         """
         Getting the company name unified from the cache, if there is one.
         Otherwise, we are looking for verification of legal entities on websites.
@@ -101,26 +71,22 @@ class LegalEntitiesParser(object):
         api_inn: Union[str, None]
         api_name: Union[str, None]
         rows: sqlite3.Cursor = self.cur.execute(f"SELECT * FROM {self.table_name} WHERE key = {inn}")
-        api_name_dadata = self.get_company_name_from_dadata(inn) if inn.isdigit() else None
         if list_rows := list(rows):
             logger.info(f"Unified company is {list_rows[0][1]}. INN is {list_rows[0][0]}", pid=os.getpid())
-            return list_rows[0][0], list_rows[0][1], api_name_dadata
+            return list_rows[0][0], list_rows[0][1]
         for key in [inn]:
-            api_inn, api_name = None, None
+            api_name = None
             if key != 'None':
-                if len(key) == 10:
-                    api_inn, api_name = self.get_company_name_from_legal_entities_parser(key, 'clip_inn')
-                elif len(key) == 12:
-                    api_inn, api_name = self.get_company_name_from_legal_entities_parser(key, 'req_inn')
-            if api_inn is not None and api_name is not None:
-                self.cache_add_and_save(api_inn, api_name)
+                api_name = self.get_company_name_from_dadata(inn) if inn.isdigit() else None
+            if inn is not None and api_name is not None:
+                self.cache_add_and_save(inn, api_name)
                 break
             else:
-                logger.error(f"Not found INN {api_inn} in rusprofile. Index is {index}. Unified company name is "
+                logger.error(f"Not found INN {inn} in rusprofile. Index is {index}. Unified company name is "
                              f"{api_name}", pid=os.getpid())
-                logger_stream.error(f"Not found INN {api_inn} in rusprofile. Index is {index}."
+                logger_stream.error(f"Not found INN {inn} in rusprofile. Index is {index}."
                                     f" Unified company name is {api_name}")
-        return api_inn, api_name, api_name_dadata
+        return inn, api_name
 
 
 class SearchEngineParser(LegalEntitiesParser):
@@ -181,7 +147,6 @@ class SearchEngineParser(LegalEntitiesParser):
             r: Response = session.get(f"https://xmlriver.com/search_yandex/xml?user={USER_XML_RIVER}"
                                       f"&key={KEY_XML_RIVER}&query={value} ИНН", timeout=120)
         except Exception as e:
-            logger.error(f"Run time out. Data is {value}", pid=os.getpid())
             raise MyError(f"Run time out. Index is {index}. Exception is {e}. Value - {value}", value, index) from e
         logger.info(f"After request. Data is {value}", pid=os.getpid())
         xml_code: str = r.html.html
