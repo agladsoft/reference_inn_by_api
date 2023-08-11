@@ -4,6 +4,7 @@ import time
 import sqlite3
 import contextlib
 import validate_inn
+from pathlib import Path
 from dadata import Dadata
 from requests import Response
 from typing import Union, Tuple
@@ -25,6 +26,41 @@ class LegalEntitiesParser(object):
         self.table_name: str = table_name
         self.conn: sqlite3.Connection = conn
         self.cur: sqlite3.Cursor = self.load_cache()
+        self.conn_dadata: sqlite3.Connection = self.create_file_for_cache_dadata()
+        self.cur_dadata: sqlite3.Cursor = self.load_cache_dadata()
+
+    @staticmethod
+    def create_file_for_cache_dadata():
+        """
+        Creating a file for recording Dadata caches and sentence.
+        """
+        path_cache: str = "/home/ruscon/all_data_of_dadata.db"
+        fle: Path = Path(path_cache)
+        if not os.path.exists(os.path.dirname(fle)):
+            os.makedirs(os.path.dirname(fle))
+        fle.touch(exist_ok=True)
+        return sqlite3.connect(path_cache)
+
+    def load_cache_dadata(self) -> sqlite3.Cursor:
+        """
+        Loading the cache.
+        """
+        cur: sqlite3.Cursor = self.conn_dadata.cursor()
+        cur.execute("""CREATE TABLE IF NOT EXISTS cache_dadata(
+            inn TEXT PRIMARY KEY, 
+            dadata_data TEXT)
+        """)
+        self.conn_dadata.commit()
+        logger.info("Cache table cache_dadata is created")
+        return cur
+
+    def cache_add_and_save_dadata(self, api_inn: str, dadata_data: str) -> None:
+        """
+        Saving and adding the result to the cache.
+        """
+        self.cur_dadata.executemany("INSERT or IGNORE INTO cache_dadata VALUES(?, ?)", [(api_inn, dadata_data)])
+        self.conn_dadata.commit()
+        logger.info(f"Data inserted to cache by inn {api_inn}")
 
     def load_cache(self) -> sqlite3.Cursor:
         """
@@ -46,8 +82,7 @@ class LegalEntitiesParser(object):
         self.conn.commit()
         return "Данные записываются в кэш", api_inn, api_name
 
-    @staticmethod
-    def get_company_name_from_dadata(inn: str, dadata_name: str = None) -> Union[str, None]:
+    def get_company_name_from_dadata(self, inn: str, dadata_name: str = None) -> Union[str, None]:
         """
         Looking for a company name unified from the website of legal entities.
         """
@@ -56,8 +91,9 @@ class LegalEntitiesParser(object):
             time.sleep(0.5)
             dadata = Dadata(TOKEN_DADATA)
             logger.info(f"After request. Data is {inn}", pid=os.getpid())
-            dadata_inn = dadata.find_by_id("party", inn)[0]
-            return dadata_inn['value']
+            dadata_inn = dadata.find_by_id("party", inn)
+            self.cache_add_and_save_dadata(inn, str(dadata_inn))
+            return dadata_inn[0]['value']
         except Exception as e:
             logger.info(f"Dadata {dadata_name}. Exception is {e}. Value - {inn}", pid=os.getpid())
             return dadata_name
