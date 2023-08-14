@@ -117,7 +117,7 @@ class ReferenceInn(object):
         list_inn: list = []
         logger.info(f"Processing of a row with index {index} begins. Data is {sentence}", pid=os.getpid())
         all_list_inn: list = re.findall(r"\d+", sentence)
-        cache_inn: LegalEntitiesParser = LegalEntitiesParser("inn_and_uni_company_name", conn)
+        cache_inn: LegalEntitiesParser = LegalEntitiesParser()
         for item_inn in all_list_inn:
             with contextlib.suppress(Exception):
                 item_inn2 = validate_inn.validate(item_inn)

@@ -1,17 +1,14 @@
 import os
 import re
-import time
 import sqlite3
+import requests
 import contextlib
 import validate_inn
-from pathlib import Path
-from dadata import Dadata
 from requests import Response
 from typing import Union, Tuple
 from requests_html import HTMLSession
 import xml.etree.ElementTree as ElemTree
-from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE, \
-    TOKEN_DADATA
+from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE
 
 
 class MyError(Exception):
@@ -22,45 +19,26 @@ class MyError(Exception):
 
 
 class LegalEntitiesParser(object):
+
+    def get_company_name_from_cache(self, inn: str, index: int) -> \
+            Tuple[Union[str, None], Union[list, None]]:
+        """
+        Getting the company name unified from the cache, if there is one.
+        Otherwise, we are looking for verification of legal entities on websites.
+        """
+        data: dict = {
+            "inn": inn
+        }
+        response: Response = requests.post("http://service_inn:8003", json=data).json()
+        return inn, response[0]['value']
+
+
+class SearchEngineParser(LegalEntitiesParser):
+
     def __init__(self, table_name, conn):
         self.table_name: str = table_name
         self.conn: sqlite3.Connection = conn
         self.cur: sqlite3.Cursor = self.load_cache()
-        self.conn_dadata: sqlite3.Connection = self.create_file_for_cache_dadata()
-        self.cur_dadata: sqlite3.Cursor = self.load_cache_dadata()
-
-    @staticmethod
-    def create_file_for_cache_dadata():
-        """
-        Creating a file for recording Dadata caches and sentence.
-        """
-        path_cache: str = "/home/ruscon/all_data_of_dadata.db"
-        fle: Path = Path(path_cache)
-        if not os.path.exists(os.path.dirname(fle)):
-            os.makedirs(os.path.dirname(fle))
-        fle.touch(exist_ok=True)
-        return sqlite3.connect(path_cache)
-
-    def load_cache_dadata(self) -> sqlite3.Cursor:
-        """
-        Loading the cache.
-        """
-        cur: sqlite3.Cursor = self.conn_dadata.cursor()
-        cur.execute("""CREATE TABLE IF NOT EXISTS cache_dadata(
-            inn TEXT PRIMARY KEY, 
-            dadata_data TEXT)
-        """)
-        self.conn_dadata.commit()
-        logger.info("Cache table cache_dadata is created")
-        return cur
-
-    def cache_add_and_save_dadata(self, api_inn: str, dadata_data: str) -> None:
-        """
-        Saving and adding the result to the cache.
-        """
-        self.cur_dadata.executemany("INSERT or IGNORE INTO cache_dadata VALUES(?, ?)", [(api_inn, dadata_data)])
-        self.conn_dadata.commit()
-        logger.info(f"Data inserted to cache by inn {api_inn}")
 
     def load_cache(self) -> sqlite3.Cursor:
         """
@@ -81,51 +59,6 @@ class LegalEntitiesParser(object):
         self.cur.executemany(f"INSERT or IGNORE INTO {self.table_name} VALUES(?, ?)", [(api_inn, api_name)])
         self.conn.commit()
         return "Данные записываются в кэш", api_inn, api_name
-
-    def get_company_name_from_dadata(self, inn: str, dadata_name: str = None) -> Union[str, None]:
-        """
-        Looking for a company name unified from the website of legal entities.
-        """
-        try:
-            logger.info(f"Before request. Data is {inn}", pid=os.getpid())
-            time.sleep(0.5)
-            dadata = Dadata(TOKEN_DADATA)
-            logger.info(f"After request. Data is {inn}", pid=os.getpid())
-            dadata_inn = dadata.find_by_id("party", inn)
-            self.cache_add_and_save_dadata(inn, str(dadata_inn))
-            return dadata_inn[0]['value']
-        except Exception as e:
-            logger.info(f"Dadata {dadata_name}. Exception is {e}. Value - {inn}", pid=os.getpid())
-            return dadata_name
-
-    def get_company_name_from_cache(self, inn: str, index: int) -> \
-            Tuple[Union[str, None], Union[str, None]]:
-        """
-        Getting the company name unified from the cache, if there is one.
-        Otherwise, we are looking for verification of legal entities on websites.
-        """
-        api_inn: Union[str, None]
-        api_name: Union[str, None]
-        rows: sqlite3.Cursor = self.cur.execute(f"SELECT * FROM {self.table_name} WHERE key = {inn}")
-        if list_rows := list(rows):
-            logger.info(f"Unified company is {list_rows[0][1]}. INN is {list_rows[0][0]}", pid=os.getpid())
-            return list_rows[0][0], list_rows[0][1]
-        for key in [inn]:
-            api_name = None
-            if key != 'None':
-                api_name = self.get_company_name_from_dadata(inn) if inn.isdigit() else None
-            if inn is not None and api_name is not None:
-                self.cache_add_and_save(inn, api_name)
-                break
-            else:
-                logger.error(f"Not found INN {inn} in rusprofile. Index is {index}. Unified company name is "
-                             f"{api_name}", pid=os.getpid())
-                logger_stream.error(f"Not found INN {inn} in rusprofile. Index is {index}."
-                                    f" Unified company name is {api_name}")
-        return inn, api_name
-
-
-class SearchEngineParser(LegalEntitiesParser):
 
     @staticmethod
     def log_error(prefix: str, message: str) -> None:
