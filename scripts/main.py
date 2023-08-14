@@ -98,17 +98,6 @@ class ReferenceInn(object):
         inn, translated = provider.get_company_name_from_cache(translated, index)
         return inn, translated
 
-    def is_find_foreign_company(self, cache_inn: LegalEntitiesParser, sentence: str, data: dict, index: int) -> None:
-        """
-        Search for international companies.
-        """
-        for country_and_city in COUNTRY_KAZAKHSTAN:
-            if re.findall(country_and_city, sentence.upper()):
-                data["is_foreign_company"] = True
-                self.get_company_name_by_inn(cache_inn, data, inn="'None'", sentence=sentence, index=index)
-        if not data["is_foreign_company"]:
-            data["is_foreign_company"] = False
-
     def get_inn_from_row(self, sentence: str, data: dict, index: int) -> None:
         """
         Full processing of the sentence, including 1). inn search by offer -> company search by inn,
@@ -124,7 +113,6 @@ class ReferenceInn(object):
                 list_inn.append(item_inn2)
         data['original_file_name'] = os.path.basename(self.filename)
         data['original_file_parsed_on'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # self.is_find_foreign_company(cache_inn, sentence, data, index)
         if list_inn:
             self.get_company_name_by_inn(cache_inn, data, inn=list_inn[0], sentence=sentence, index=index)
         else:
