@@ -29,8 +29,9 @@ class LegalEntitiesParser(object):
         data: dict = {
             "inn": inn
         }
-        response: Response = requests.post("http://service_inn:8003", json=data).json()
-        return inn, response[0]['value']
+        response: Response = requests.post("http://service_inn:8003", json=data)
+        if response.status_code == 200:
+            return inn, response[0]['value']
 
 
 class SearchEngineParser(LegalEntitiesParser):
