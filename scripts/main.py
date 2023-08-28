@@ -70,6 +70,7 @@ class ReferenceInn(object):
         inn, company_name, is_cache = provider.get_company_name_from_cache(inn, index)
         logger.info(f"Transleted is {translated}. Index is {index}", pid=os.getpid())
         data["company_inn"] = inn
+        data["is_company_name_from_cache"] = is_cache
         company_name: str = re.sub(" +", " ", company_name)
         data["company_name_unified"] = company_name
         company_name = self.replace_forms_organizations(company_name)
