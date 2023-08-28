@@ -108,6 +108,24 @@ class SearchEngineParser(LegalEntitiesParser):
             elif code == '110' or code != '15':
                 raise MyError(message, value, index)
 
+    def parse_xml(self, response: Response, index: int, value: str) -> Tuple[ElemTree.Element, int, int]:
+        """
+        Parsing xml.
+        """
+        xml_code: str = response.html.html
+        myroot: ElemTree = ElemTree.fromstring(xml_code)
+        self.get_code_error(myroot[0][0], index, value)
+        index_page: int = 2 if myroot[0][1].tag == 'correct' else 1
+        try:
+            last_range: int = int(myroot[0][index_page][0][0].attrib['last'])
+        except IndexError as index_err:
+            logger.warning(f"The request to Yandex has been corrected, so we are shifting the index. Index is {index}. "
+                           f"Exception - {index_err}", pid=os.getpid())
+            index_page += + 1
+            last_range = int(myroot[0][index_page][0][0].attrib['last'])
+        return myroot, index_page, last_range
+
+
     def get_inn_from_search_engine(self, value: str, index: int) -> str:
         """
         Looking for the INN in the search engine, and then we parse through the sites.
@@ -121,11 +139,7 @@ class SearchEngineParser(LegalEntitiesParser):
             logger.error(f"Run time out. Data is {value}", pid=os.getpid())
             raise MyError(f"Run time out. Index is {index}. Exception is {e}. Value - {value}", value, index) from e
         logger.info(f"After request. Data is {value}", pid=os.getpid())
-        xml_code: str = r.html.html
-        myroot: ElemTree = ElemTree.fromstring(xml_code)
-        self.get_code_error(myroot[0][0], index, value)
-        index_page: int = 2 if myroot[0][1].tag == 'correct' else 1
-        last_range: int = int(myroot[0][index_page][0][0].attrib['last'])
+        myroot, index_page, last_range = self.parse_xml(r, index, value)
         dict_inn: dict = {}
         count_inn: int = 0
         for results in range(1, last_range):
