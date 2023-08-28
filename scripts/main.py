@@ -79,18 +79,13 @@ class ReferenceInn(object):
         data['confidence_rate'] = fuzz_company_name
         logger.info(f"Data was written successfully to the dictionary. Data is {sentence}", pid=os.getpid())
 
-    def get_company_name_by_sentence(self, provider: SearchEngineParser, sentence: str, index: int,
-                                     is_english: bool = False) -> Tuple[str, str]:
+    def get_company_name_by_sentence(self, provider: SearchEngineParser, sentence: str, index: int) -> Tuple[str, str]:
         """
         We send the sentence to the Yandex search engine (first we pre-process: translate it into Russian) by the link
         https://xmlriver.com/search_yandex/xml?user=6390&key=e3b3ac2908b2a9e729f1671218c85e12cfe643b0&query=<value> INN
         """
         sign = '/'
         sentence: str = sentence.translate({ord(c): " " for c in r".,!@#$%^&*()[]{};?\|~=_+"})
-        if is_english:
-            sentence = sentence.replace('"', "")
-            inn, translated = provider.get_company_name_from_cache(sentence, index)
-            return inn, translated
         sentence = self.replace_quotes(sentence, replaced_str=' ')
         sentence = re.sub(" +", " ", sentence).strip() + sign
         translated: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500])
@@ -179,6 +174,7 @@ class ReferenceInn(object):
         dataframe['company_name_rus'] = None
         dataframe['company_inn'] = None
         dataframe['company_name_unified'] = None
+        dataframe['company_name_unified_en'] = None
         dataframe['is_inn_found_auto'] = None
         dataframe['original_file_name'] = None
         dataframe['original_file_parsed_on'] = None
