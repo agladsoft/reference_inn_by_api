@@ -67,9 +67,10 @@ class ReferenceInn(object):
             translated: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500] + " ")
         data['is_inn_found_auto'] = True
         data['company_name_rus'] = translated
-        inn, company_name = provider.get_company_name_from_cache(inn, index)
+        inn, company_name, is_cache = provider.get_company_name_from_cache(inn, index)
         logger.info(f"Transleted is {translated}. Index is {index}", pid=os.getpid())
         data["company_inn"] = inn
+        data["is_company_name_from_cache"] = is_cache
         company_name: str = re.sub(" +", " ", company_name)
         data["company_name_unified"] = company_name
         company_name = self.replace_forms_organizations(company_name)
@@ -78,18 +79,13 @@ class ReferenceInn(object):
         data['confidence_rate'] = fuzz_company_name
         logger.info(f"Data was written successfully to the dictionary. Data is {sentence}", pid=os.getpid())
 
-    def get_company_name_by_sentence(self, provider: SearchEngineParser, sentence: str, index: int,
-                                     is_english: bool = False) -> Tuple[str, str]:
+    def get_company_name_by_sentence(self, provider: SearchEngineParser, sentence: str, index: int) -> Tuple[str, str]:
         """
         We send the sentence to the Yandex search engine (first we pre-process: translate it into Russian) by the link
         https://xmlriver.com/search_yandex/xml?user=6390&key=e3b3ac2908b2a9e729f1671218c85e12cfe643b0&query=<value> INN
         """
         sign = '/'
         sentence: str = sentence.translate({ord(c): " " for c in r".,!@#$%^&*()[]{};?\|~=_+"})
-        if is_english:
-            sentence = sentence.replace('"', "")
-            inn, translated = provider.get_company_name_from_cache(sentence, index)
-            return inn, translated
         sentence = self.replace_quotes(sentence, replaced_str=' ')
         sentence = re.sub(" +", " ", sentence).strip() + sign
         translated: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500])
@@ -97,17 +93,6 @@ class ReferenceInn(object):
         translated = re.sub(" +", " ", translated).strip()
         inn, translated = provider.get_company_name_from_cache(translated, index)
         return inn, translated
-
-    def is_find_foreign_company(self, cache_inn: LegalEntitiesParser, sentence: str, data: dict, index: int) -> None:
-        """
-        Search for international companies.
-        """
-        for country_and_city in COUNTRY_KAZAKHSTAN:
-            if re.findall(country_and_city, sentence.upper()):
-                data["is_foreign_company"] = True
-                self.get_company_name_by_inn(cache_inn, data, inn="'None'", sentence=sentence, index=index)
-        if not data["is_foreign_company"]:
-            data["is_foreign_company"] = False
 
     def get_inn_from_row(self, sentence: str, data: dict, index: int) -> None:
         """
@@ -117,14 +102,13 @@ class ReferenceInn(object):
         list_inn: list = []
         logger.info(f"Processing of a row with index {index} begins. Data is {sentence}", pid=os.getpid())
         all_list_inn: list = re.findall(r"\d+", sentence)
-        cache_inn: LegalEntitiesParser = LegalEntitiesParser("inn_and_uni_company_name", conn)
+        cache_inn: LegalEntitiesParser = LegalEntitiesParser()
         for item_inn in all_list_inn:
             with contextlib.suppress(Exception):
                 item_inn2 = validate_inn.validate(item_inn)
                 list_inn.append(item_inn2)
         data['original_file_name'] = os.path.basename(self.filename)
         data['original_file_parsed_on'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # self.is_find_foreign_company(cache_inn, sentence, data, index)
         if list_inn:
             self.get_company_name_by_inn(cache_inn, data, inn=list_inn[0], sentence=sentence, index=index)
         else:
@@ -188,14 +172,14 @@ class ReferenceInn(object):
         dataframe = dataframe.replace({np.nan: None})
         dataframe['company_name'] = dataframe['company_name'].replace({'_x000D_': ''}, regex=True)
         dataframe['company_name_rus'] = None
-        dataframe['company_name_unified_en'] = None
         dataframe['company_inn'] = None
         dataframe['company_name_unified'] = None
-        dataframe["is_foreign_company"] = None
+        dataframe['company_name_unified_en'] = None
         dataframe['is_inn_found_auto'] = None
         dataframe['original_file_name'] = None
         dataframe['original_file_parsed_on'] = None
         dataframe['confidence_rate'] = None
+        dataframe['is_company_name_from_cache'] = None
         return dataframe.to_dict('records')
 
     def handle_queue(self, e: Any) -> None:

@@ -1,16 +1,14 @@
 import os
 import re
-import time
 import sqlite3
+import requests
 import contextlib
 import validate_inn
-from dadata import Dadata
 from requests import Response
 from typing import Union, Tuple
 from requests_html import HTMLSession
 import xml.etree.ElementTree as ElemTree
-from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE, \
-    TOKEN_DADATA
+from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE
 
 
 class MyError(Exception):
@@ -21,6 +19,24 @@ class MyError(Exception):
 
 
 class LegalEntitiesParser(object):
+
+    def get_company_name_from_cache(self, inn: str, index: int) -> \
+            Tuple[Union[str, None], Union[list, None], bool]:
+        """
+        Getting the company name unified from the cache, if there is one.
+        Otherwise, we are looking for verification of legal entities on websites.
+        """
+        data: dict = {
+            "inn": inn
+        }
+        response: Response = requests.post("http://service_inn:8003", json=data)
+        if response.status_code == 200:
+            data = response.json()
+            return inn, data[0][0]['value'], data[1]
+
+
+class SearchEngineParser(LegalEntitiesParser):
+
     def __init__(self, table_name, conn):
         self.table_name: str = table_name
         self.conn: sqlite3.Connection = conn
@@ -45,51 +61,6 @@ class LegalEntitiesParser(object):
         self.cur.executemany(f"INSERT or IGNORE INTO {self.table_name} VALUES(?, ?)", [(api_inn, api_name)])
         self.conn.commit()
         return "Данные записываются в кэш", api_inn, api_name
-
-    @staticmethod
-    def get_company_name_from_dadata(inn: str, dadata_name: str = None) -> Union[str, None]:
-        """
-        Looking for a company name unified from the website of legal entities.
-        """
-        try:
-            logger.info(f"Before request. Data is {inn}", pid=os.getpid())
-            time.sleep(0.5)
-            dadata = Dadata(TOKEN_DADATA)
-            logger.info(f"After request. Data is {inn}", pid=os.getpid())
-            dadata_inn = dadata.find_by_id("party", inn)[0]
-            return dadata_inn['value']
-        except Exception as e:
-            logger.info(f"Dadata {dadata_name}. Exception is {e}. Value - {inn}", pid=os.getpid())
-            return dadata_name
-
-    def get_company_name_from_cache(self, inn: str, index: int) -> \
-            Tuple[Union[str, None], Union[str, None]]:
-        """
-        Getting the company name unified from the cache, if there is one.
-        Otherwise, we are looking for verification of legal entities on websites.
-        """
-        api_inn: Union[str, None]
-        api_name: Union[str, None]
-        rows: sqlite3.Cursor = self.cur.execute(f"SELECT * FROM {self.table_name} WHERE key = {inn}")
-        if list_rows := list(rows):
-            logger.info(f"Unified company is {list_rows[0][1]}. INN is {list_rows[0][0]}", pid=os.getpid())
-            return list_rows[0][0], list_rows[0][1]
-        for key in [inn]:
-            api_name = None
-            if key != 'None':
-                api_name = self.get_company_name_from_dadata(inn) if inn.isdigit() else None
-            if inn is not None and api_name is not None:
-                self.cache_add_and_save(inn, api_name)
-                break
-            else:
-                logger.error(f"Not found INN {inn} in rusprofile. Index is {index}. Unified company name is "
-                             f"{api_name}", pid=os.getpid())
-                logger_stream.error(f"Not found INN {inn} in rusprofile. Index is {index}."
-                                    f" Unified company name is {api_name}")
-        return inn, api_name
-
-
-class SearchEngineParser(LegalEntitiesParser):
 
     @staticmethod
     def log_error(prefix: str, message: str) -> None:
@@ -137,6 +108,24 @@ class SearchEngineParser(LegalEntitiesParser):
             elif code == '110' or code != '15':
                 raise MyError(message, value, index)
 
+    def parse_xml(self, response: Response, index: int, value: str) -> Tuple[ElemTree.Element, int, int]:
+        """
+        Parsing xml.
+        """
+        xml_code: str = response.html.html
+        myroot: ElemTree = ElemTree.fromstring(xml_code)
+        self.get_code_error(myroot[0][0], index, value)
+        index_page: int = 2 if myroot[0][1].tag == 'correct' else 1
+        try:
+            last_range: int = int(myroot[0][index_page][0][0].attrib['last'])
+        except IndexError as index_err:
+            logger.warning(f"The request to Yandex has been corrected, so we are shifting the index. Index is {index}. "
+                           f"Exception - {index_err}", pid=os.getpid())
+            index_page += + 1
+            last_range = int(myroot[0][index_page][0][0].attrib['last'])
+        return myroot, index_page, last_range
+
+
     def get_inn_from_search_engine(self, value: str, index: int) -> str:
         """
         Looking for the INN in the search engine, and then we parse through the sites.
@@ -150,11 +139,7 @@ class SearchEngineParser(LegalEntitiesParser):
             logger.error(f"Run time out. Data is {value}", pid=os.getpid())
             raise MyError(f"Run time out. Index is {index}. Exception is {e}. Value - {value}", value, index) from e
         logger.info(f"After request. Data is {value}", pid=os.getpid())
-        xml_code: str = r.html.html
-        myroot: ElemTree = ElemTree.fromstring(xml_code)
-        self.get_code_error(myroot[0][0], index, value)
-        index_page: int = 2 if myroot[0][1].tag == 'correct' else 1
-        last_range: int = int(myroot[0][index_page][0][0].attrib['last'])
+        myroot, index_page, last_range = self.parse_xml(r, index, value)
         dict_inn: dict = {}
         count_inn: int = 0
         for results in range(1, last_range):
@@ -172,17 +157,10 @@ class SearchEngineParser(LegalEntitiesParser):
         """
         Getting the INN from the cache, if there is one. Otherwise, we search in the search engine.
         """
-        rows: sqlite3.Cursor = self.cur.execute(
-            f"""SELECT * FROM "{self.table_name.replace('"', '""')}" WHERE key=?""", (value,),
-        )
-        list_rows: list = list(rows)
-        if list_rows and list_rows[0][1] != "None":
-            logger.info(f"Data is {list_rows[0][0]}. INN is {list_rows[0][1]}", pid=os.getpid())
-            return list_rows[0][1], list_rows[0][0]
         for key in [value]:
             api_inn: str = self.get_inn_from_search_engine(key, index)
             with contextlib.suppress(Exception):
-                if list_rows[0][1] == 'None':
+                if api_inn == 'None':
                     sql_update_query: str = f"""Update {self.table_name} set value = ? where key = ?"""
                     data: Tuple[str, str] = (api_inn, value)
                     self.cur.execute(sql_update_query, data)
