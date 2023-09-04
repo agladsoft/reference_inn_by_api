@@ -157,17 +157,10 @@ class SearchEngineParser(LegalEntitiesParser):
         """
         Getting the INN from the cache, if there is one. Otherwise, we search in the search engine.
         """
-        rows: sqlite3.Cursor = self.cur.execute(
-            f"""SELECT * FROM "{self.table_name.replace('"', '""')}" WHERE key=?""", (value,),
-        )
-        list_rows: list = list(rows)
-        if list_rows and list_rows[0][1] != "None":
-            logger.info(f"Data is {list_rows[0][0]}. INN is {list_rows[0][1]}", pid=os.getpid())
-            return list_rows[0][1], list_rows[0][0]
         for key in [value]:
             api_inn: str = self.get_inn_from_search_engine(key, index)
             with contextlib.suppress(Exception):
-                if list_rows[0][1] == 'None':
+                if api_inn == 'None':
                     sql_update_query: str = f"""Update {self.table_name} set value = ? where key = ?"""
                     data: Tuple[str, str] = (api_inn, value)
                     self.cur.execute(sql_update_query, data)
