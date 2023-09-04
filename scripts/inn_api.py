@@ -125,7 +125,6 @@ class SearchEngineParser(LegalEntitiesParser):
             last_range = int(myroot[0][index_page][0][0].attrib['last'])
         return myroot, index_page, last_range
 
-
     def get_inn_from_search_engine(self, value: str, index: int) -> str:
         """
         Looking for the INN in the search engine, and then we parse through the sites.
