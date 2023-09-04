@@ -58,7 +58,7 @@ class SearchEngineParser(LegalEntitiesParser):
         """
         Saving and adding the result to the cache.
         """
-        self.cur.executemany(f"INSERT or IGNORE INTO {self.table_name} VALUES(?, ?)", [(api_inn, api_name)])
+        self.cur.executemany(f"INSERT or REPLACE INTO {self.table_name} VALUES(?, ?)", [(api_inn, api_name)])
         self.conn.commit()
         return "Данные записываются в кэш", api_inn, api_name
 
@@ -124,7 +124,6 @@ class SearchEngineParser(LegalEntitiesParser):
             index_page += + 1
             last_range = int(myroot[0][index_page][0][0].attrib['last'])
         return myroot, index_page, last_range
-
 
     def get_inn_from_search_engine(self, value: str, index: int) -> str:
         """
