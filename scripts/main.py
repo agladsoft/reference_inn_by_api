@@ -210,39 +210,45 @@ class ReferenceInn(object):
             retry_queue.put(index, timeout=120, block=False)
 
 
-if __name__ == "__main__":
-    pool: Pool
-    procs: list = []
-    logger.info("The script has started its work")
-    logger.info(f'File is {os.path.basename(sys.argv[1])}')
-    reference_inn: ReferenceInn = ReferenceInn(os.path.abspath(sys.argv[1]), sys.argv[2])
-    path: str = reference_inn.create_file_for_cache()
-    conn: Connection = sqlite3.connect(path)
-    parsed_data: List[dict] = reference_inn.convert_csv_to_dict()
-    error_flag = Value('i', 0)
+def main():
+    global pool
     with Pool(processes=WORKER_COUNT) as pool:
-        retry_queue: Queue = Queue()
         for i, dict_data in enumerate(parsed_data, 2):
             pool.apply_async(reference_inn.parse_data, (i, dict_data), error_callback=reference_inn.handle_errors)
         logger.info("Processors will be attached and closed. Next, the queue will be processed")
         pool.close()
         pool.join()
 
-        logger.info(f"All rows have been processed. Is the queue empty? {retry_queue.empty()}")
+    logger.info(f"All rows have been processed. Is the queue empty? {retry_queue.empty()}")
 
-        if not retry_queue.empty():
-            time.sleep(120)
-            logger.info(f"Processing of processes that are in the queue. Size queue is {retry_queue.qsize()}")
-            with Pool(processes=WORKER_COUNT) as _pool:
-                while not retry_queue.empty():
-                    index_queue = retry_queue.get()
-                    _pool.apply_async(reference_inn.parse_data, (index_queue, parsed_data[index_queue - 2]),
-                                      error_callback=reference_inn.handle_queue)
-                _pool.close()
-                _pool.join()
+    if not retry_queue.empty():
+        time.sleep(120)
+        logger.info(f"Processing of processes that are in the queue. Size queue is {retry_queue.qsize()}")
+        with Pool(processes=WORKER_COUNT) as _pool:
+            while not retry_queue.empty():
+                index_queue = retry_queue.get()
+                _pool.apply_async(reference_inn.parse_data, (index_queue, parsed_data[index_queue - 2]),
+                                  error_callback=reference_inn.handle_queue)
+            _pool.close()
+            _pool.join()
+
+
+if __name__ == "__main__":
+    try:
+        logger.info("The script has started its work")
+        logger.info(f'File is {os.path.basename(sys.argv[1])}')
+        reference_inn: ReferenceInn = ReferenceInn(os.path.abspath(sys.argv[1]), sys.argv[2])
+        path: str = reference_inn.create_file_for_cache()
+        conn: Connection = sqlite3.connect(path)
+        parsed_data: List[dict] = reference_inn.convert_csv_to_dict()
+        error_flag = Value('i', 0)
+        retry_queue: Queue = Queue()
+
+        main()
 
         if error_flag.value == 1:
             sys.exit(1)
-
-    conn.close()
-    logger.info("The script has completed its work")
+        conn.close()
+        logger.info("The script has completed its work")
+    except Exception as ex_all:
+        logger.exception(f"Error is {ex_all}. Type error is {type(ex_all)}")
