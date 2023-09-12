@@ -224,6 +224,7 @@ if __name__ == "__main__":
         retry_queue: Queue = Queue()
         for i, dict_data in enumerate(parsed_data, 2):
             pool.apply_async(reference_inn.parse_data, (i, dict_data), error_callback=reference_inn.handle_errors)
+        logger.info("Processors will be attached and closed. Next, the queue will be processed")
         pool.close()
         pool.join()
 
