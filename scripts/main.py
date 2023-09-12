@@ -207,7 +207,7 @@ class ReferenceInn(object):
             index: int = e.index
             logger.error(f"An error occured in which the processor was added to the queue. Index is {index}. "
                          f"Data is {e.value}", pid=os.getpid())
-            retry_queue.put(index)
+            retry_queue.put(index, timeout=120, block=False)
 
 
 if __name__ == "__main__":
