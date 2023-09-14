@@ -12,11 +12,11 @@ from pathlib import Path
 from fuzzywuzzy import fuzz
 from pandas import DataFrame
 from sqlite3 import Connection
-from typing import List, Tuple, Any, Union
+from typing import List, Tuple, Union
 from pandas.io.parsers import TextFileReader
 from multiprocessing import Pool, Queue, Value
 from deep_translator import GoogleTranslator, exceptions
-from inn_api import LegalEntitiesParser, SearchEngineParser, MyError
+from inn_api import LegalEntitiesParser, SearchEngineParser
 
 
 class ReferenceInn(object):
@@ -126,7 +126,32 @@ class ReferenceInn(object):
             json.dump(data, f, ensure_ascii=False, indent=4)
             logger.info(f"Data was written successfully to the file. Index is {index}. Data is {data}", pid=os.getpid())
 
-    def parse_data(self, index: int, data: dict) -> None:
+    def add_index_in_queue(self, is_queue: bool, sentence: str, index: int) -> None:
+        """
+        Adding an index to the queue or writing empty data.
+        """
+        if not is_queue:
+            logger.error(f"An error occured in which the processor was added to the queue. Index is {index}. "
+                         f"Data is {sentence}", pid=os.getpid())
+            retry_queue.put(index)
+        else:
+            data_queue: dict = parsed_data[index - 2]
+            data_queue['original_file_name'] = os.path.basename(self.filename)
+            data_queue['original_file_parsed_on'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            self.write_to_json(index, data_queue)
+
+    @staticmethod
+    def stop_parse_data(index: int, ex_interrupt: str) -> None:
+        """
+
+        """
+        error_message: str = f'Too many requests to the translator. Exception - {ex_interrupt}'
+        logger.error(error_message, pid=os.getpid())
+        logger_stream.error(f'много_запросов_к_переводчику_на_строке_{index}')
+        error_flag.value = 1
+        pool.terminate()
+
+    def parse_data(self, index: int, data: dict, is_queue: bool = False) -> None:
         """
         Processing each row.
         """
@@ -139,15 +164,11 @@ class ReferenceInn(object):
                              f'Exception - {ex}', pid=os.getpid())
                 logger_stream.error(f'Not found INN in Yandex. Data is {index, sentence} '
                                     f'(most likely a foreign company). Exception - {ex}')
-            except exceptions.TooManyRequests as ex_translator:
-                error_message = f'Too many requests to the translator. Exception - {ex_translator}'
-                logger.error(error_message, pid=os.getpid())
-                logger_stream.error(f'много_запросов_к_переводчику_на_строке_{index}')
-                raise AssertionError(error_message) from ex_translator
+            except (exceptions.TooManyRequests, AssertionError) as ex_interrupt:
+                self.stop_parse_data(index, ex_interrupt)
             except Exception as ex_full:
                 logger.error(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}', pid=os.getpid())
-                raise MyError(f"Index is {index}. "
-                              f"Exception is {ex_full}. Value - {sentence}", sentence, index) from ex_full
+                self.add_index_in_queue(is_queue, sentence, index)
         self.write_to_json(index, data)
 
     @staticmethod
@@ -182,73 +203,33 @@ class ReferenceInn(object):
         dataframe['is_company_name_from_cache'] = None
         return dataframe.to_dict('records')
 
-    def handle_queue(self, e: Any) -> None:
-        """
-        Write data to file from queue.
-        """
-        if type(e) is AssertionError:
-            error_flag.value = 1
-            pool.terminate()
-        else:
-            data_queue: dict = parsed_data[e.index - 2]
-            data_queue['original_file_name'] = os.path.basename(self.filename)
-            data_queue['original_file_parsed_on'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            self.write_to_json(e.index, data_queue)
 
-    @staticmethod
-    def handle_errors(e: Any) -> None:
-        """
-        Interrupt all processors in case of an error or adding in the queue.
-        """
-        if type(e) is AssertionError:
-            error_flag.value = 1
-            pool.terminate()
-        else:
-            index: int = e.index
-            logger.error(f"An error occured in which the processor was added to the queue. Index is {index}. "
-                         f"Data is {e.value}", pid=os.getpid())
-            retry_queue.put(index, timeout=120, block=False)
+if __name__ == "__main__":
+    logger.info("The script has started its work")
+    logger.info(f'File is {os.path.basename(sys.argv[1])}')
+    reference_inn: ReferenceInn = ReferenceInn(os.path.abspath(sys.argv[1]), sys.argv[2])
+    path: str = reference_inn.create_file_for_cache()
+    conn: Connection = sqlite3.connect(path)
+    parsed_data: List[dict] = reference_inn.convert_csv_to_dict()
+    error_flag = Value('i', 0)
+    retry_queue: Queue = Queue()
 
-
-def main():
-    global pool
     with Pool(processes=WORKER_COUNT) as pool:
         for i, dict_data in enumerate(parsed_data, 2):
-            pool.apply_async(reference_inn.parse_data, (i, dict_data), error_callback=reference_inn.handle_errors)
-        logger.info("Processors will be attached and closed. Next, the queue will be processed")
+            pool.apply_async(reference_inn.parse_data, (i, dict_data))
+        logger.info("Processors will be attached and closed. Next, the queue will be processed", pid=os.getpid())
         pool.close()
         pool.join()
 
-    logger.info(f"All rows have been processed. Is the queue empty? {retry_queue.empty()}")
+    logger.info(f"All rows have been processed. Is the queue empty? {retry_queue.empty()}", pid=os.getpid())
 
     if not retry_queue.empty():
         time.sleep(120)
-        logger.info(f"Processing of processes that are in the queue. Size queue is {retry_queue.qsize()}")
-        with Pool(processes=WORKER_COUNT) as _pool:
+        logger.info(f"Processing of processes that are in the queue. Size queue is {retry_queue.qsize()}",
+                    pid=os.getpid())
+        with Pool(processes=WORKER_COUNT) as pool:
             while not retry_queue.empty():
                 index_queue = retry_queue.get()
-                _pool.apply_async(reference_inn.parse_data, (index_queue, parsed_data[index_queue - 2]),
-                                  error_callback=reference_inn.handle_queue)
-            _pool.close()
-            _pool.join()
-
-
-if __name__ == "__main__":
-    try:
-        logger.info("The script has started its work")
-        logger.info(f'File is {os.path.basename(sys.argv[1])}')
-        reference_inn: ReferenceInn = ReferenceInn(os.path.abspath(sys.argv[1]), sys.argv[2])
-        path: str = reference_inn.create_file_for_cache()
-        conn: Connection = sqlite3.connect(path)
-        parsed_data: List[dict] = reference_inn.convert_csv_to_dict()
-        error_flag = Value('i', 0)
-        retry_queue: Queue = Queue()
-
-        main()
-
-        if error_flag.value == 1:
-            sys.exit(1)
-        conn.close()
-        logger.info("The script has completed its work")
-    except Exception as ex_all:
-        logger.exception(f"Error is {ex_all}. Type error is {type(ex_all)}")
+                pool.apply_async(reference_inn.parse_data, (index_queue, parsed_data[index_queue - 2], True))
+            pool.close()
+            pool.join()
