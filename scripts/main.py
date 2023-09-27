@@ -139,12 +139,13 @@ class ReferenceInn(object):
             cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", conn)
             api_inn, translated = self.get_company_name_by_sentence(cache_name_inn, sentence, index)
             for inn, inn_count in api_inn.items():
-                self.join_fts(fts, data, inn, inn_count + 1)
+                self.join_fts(fts, data, inn, inn_count + 1, translated)
                 self.get_company_name_by_inn(cache_inn, data, inn, sentence, translated=translated, index=index)
                 self.write_to_csv(index, data)
 
     @staticmethod
-    def join_fts(fts: QueryResult, data: dict, inn: str, inn_count: int):
+    def join_fts(fts: QueryResult, data: dict, inn: str, inn_count: int, translated: str):
+        data["request_to_yandex"] = f"{translated} ИНН"
         data['company_inn_count'] = inn_count
         data["is_fts_found"] = False
         data["fts_company_name"] = None
@@ -241,6 +242,7 @@ class ReferenceInn(object):
         dataframe = dataframe.replace({np.nan: None})
         dataframe['company_name'] = dataframe['company_name'].replace({'_x000D_': ''}, regex=True)
         dataframe['company_name_rus'] = None
+        dataframe['request_to_yandex'] = None
         dataframe['company_inn'] = None
         dataframe['company_inn_count'] = None
         dataframe['is_fts_found'] = None
