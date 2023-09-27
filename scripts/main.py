@@ -1,9 +1,10 @@
 import re
-import csv
 import sys
 import time
 import sqlite3
 import contextlib
+from csv import DictWriter
+
 import numpy as np
 import validate_inn
 import pandas as pd
@@ -138,8 +139,9 @@ class ReferenceInn(object):
             cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", conn)
             api_inn, translated = self.get_company_name_by_sentence(cache_name_inn, sentence, index)
             for inn, inn_count in api_inn.items():
-                self.join_fts(fts, data, inn, inn_count)
+                self.join_fts(fts, data, inn, inn_count + 1)
                 self.get_company_name_by_inn(cache_inn, data, inn, sentence, translated=translated, index=index)
+                self.write_to_csv(index, data)
 
     @staticmethod
     def join_fts(fts: QueryResult, data: dict, inn: str, inn_count: int):
@@ -152,16 +154,24 @@ class ReferenceInn(object):
                 data["is_fts_found"] = True
                 data["fts_company_name"] = rows[index_name_of_the_contract_holder]
 
+    @staticmethod
+    def to_csv(output_file_path: str, data: dict, operator: str):
+        with open(output_file_path, operator) as csvfile:
+            writer = DictWriter(csvfile, fieldnames=list(data.keys()))
+            if operator == 'w':
+                writer.writeheader()
+            writer.writerow(data)
+
     def write_to_csv(self, index: int, data: dict) -> None:
         """
         Writing data to json.
         """
         basename: str = os.path.basename(self.filename)
-        output_file_path: str = os.path.join(self.directory, f'{basename}_{index}.json')
-        with open(f"{output_file_path}", 'w', encoding='utf-8') as f:
-            w = csv.DictWriter(f, data.keys())
-            w.writeheader()
-            w.writerow(data)
+        output_file_path: str = os.path.join(self.directory, f'{basename}')
+        if os.path.exists(output_file_path):
+            self.to_csv(output_file_path, data, 'a')
+        else:
+            self.to_csv(output_file_path, data, 'w')
         logger.info(f"Data was written successfully to the file. Index is {index}. Data is {data}", pid=os.getpid())
 
     def add_index_in_queue(self, is_queue: bool, sentence: str, index: int) -> None:
@@ -173,7 +183,7 @@ class ReferenceInn(object):
                          f"Data is {sentence}", pid=os.getpid())
             retry_queue.put(index)
         else:
-            data_queue: dict = parsed_data[index - 2]
+            data_queue: dict = not_parsed_data[index - 2]
             data_queue['original_file_name'] = os.path.basename(self.filename)
             data_queue['original_file_parsed_on'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.write_to_csv(index, data_queue)
@@ -207,7 +217,6 @@ class ReferenceInn(object):
             except Exception as ex_full:
                 logger.error(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}', pid=os.getpid())
                 self.add_index_in_queue(is_queue, sentence, index)
-        self.write_to_csv(index, data)
 
     @staticmethod
     def create_file_for_cache() -> str:
@@ -251,27 +260,28 @@ if __name__ == "__main__":
     reference_inn: ReferenceInn = ReferenceInn(os.path.abspath(sys.argv[1]), sys.argv[2])
     path: str = reference_inn.create_file_for_cache()
     conn: Connection = sqlite3.connect(path)
-    parsed_data: List[dict] = reference_inn.convert_csv_to_dict()
+    not_parsed_data: List[dict] = reference_inn.convert_csv_to_dict()
     client_clickhouse, fts_results = reference_inn.connect_to_db()
     error_flag = Value('i', 0)
     retry_queue: Queue = Queue()
 
     with Pool(processes=WORKER_COUNT) as pool:
-        for i, dict_data in enumerate(parsed_data, 2):
+        for i, dict_data in enumerate(not_parsed_data, 2):
             pool.apply_async(reference_inn.parse_data, (i, dict_data, fts_results))
         logger.info("Processors will be attached and closed. Next, the queue will be processed", pid=os.getpid())
         pool.close()
         pool.join()
-
     logger.info(f"All rows have been processed. Is the queue empty? {retry_queue.empty()}", pid=os.getpid())
 
     if not retry_queue.empty():
         time.sleep(120)
         logger.info(f"Processing of processes that are in the queue. Size queue is {retry_queue.qsize()}",
                     pid=os.getpid())
+        parsed_data = []
         with Pool(processes=WORKER_COUNT) as pool:
             while not retry_queue.empty():
                 index_queue = retry_queue.get()
-                pool.apply_async(reference_inn.parse_data, (index_queue, parsed_data[index_queue - 2], fts_results, True))
+                pool.apply_async(reference_inn.parse_data,
+                                 (index_queue, not_parsed_data[index_queue - 2], fts_results, True))
             pool.close()
             pool.join()
