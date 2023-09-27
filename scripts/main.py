@@ -90,16 +90,16 @@ class ReferenceInn(object):
             translated: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500] + " ")
         data['is_inn_found_auto'] = True
         data['company_name_rus'] = translated
-        inn, company_name, is_cache = provider.get_company_name_from_cache(inn, index)
+        # inn, company_name, is_cache = provider.get_company_name_from_cache(inn, index)
         logger.info(f"Transleted is {translated}. Index is {index}", pid=os.getpid())
         data["company_inn"] = inn
-        data["is_company_name_from_cache"] = is_cache
-        company_name: str = re.sub(" +", " ", company_name)
-        data["company_name_unified"] = company_name
-        company_name = self.replace_forms_organizations(company_name)
-        fuzz_company_name: int = fuzz.partial_ratio(company_name.upper(), translated.upper())
-        fuzz_company_name = self.compare_different_fuzz(company_name, translated, fuzz_company_name, data)
-        data['confidence_rate'] = fuzz_company_name
+        data["is_company_name_from_cache"] = False
+        # company_name: str = re.sub(" +", " ", company_name)
+        # data["company_name_unified"] = company_name
+        # company_name = self.replace_forms_organizations(company_name)
+        # fuzz_company_name: int = fuzz.partial_ratio(company_name.upper(), translated.upper())
+        # fuzz_company_name = self.compare_different_fuzz(company_name, translated, fuzz_company_name, data)
+        # data['confidence_rate'] = fuzz_company_name
         logger.info(f"Data was written successfully to the dictionary. Data is {sentence}", pid=os.getpid())
 
     def get_company_name_by_sentence(self, provider: SearchEngineParser, sentence: str, index: int) \
