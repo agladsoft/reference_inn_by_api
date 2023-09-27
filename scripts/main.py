@@ -147,6 +147,7 @@ class ReferenceInn(object):
     def join_fts(fts: QueryResult, data: dict, inn: str, inn_count: int):
         data['company_inn_count'] = inn_count
         data["is_fts_found"] = False
+        data["fts_company_name"] = None
         index_recipients_tin: int = fts.column_names.index('recipients_tin')
         index_name_of_the_contract_holder: int = fts.column_names.index('name_of_the_contract_holder')
         for rows in fts.result_rows:
