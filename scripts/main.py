@@ -285,3 +285,4 @@ if __name__ == "__main__":
                                  (index_queue, not_parsed_data[index_queue - 2], fts_results, True))
             pool.close()
             pool.join()
+    logger.info("The script has completed its work")
