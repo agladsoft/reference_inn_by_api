@@ -3,8 +3,8 @@ import numpy as np
 
 root_dir = '/home/timur/sambashare/reference/reference_inn_by_api/done'
 
-file_path_from_db = f'{root_dir}/select _ from default.reference_.xlsx'
-file_path_from_marketing = f'{root_dir}/test_update_all_data.xlsx'
+file_path_from_db = f'/home/timur/Загрузки/select _ from reference_inn wher (2).xlsx'
+file_path_from_marketing = f'{root_dir}/ИНН_all_enr_07_2023_3382 строк_2_12.09.23.xlsx'
 
 file_from_db = pd.read_excel(file_path_from_db)
 file_from_marketing = pd.read_excel(file_path_from_marketing)

@@ -1,7 +1,7 @@
 import re
+import csv
 import sys
 import time
-import json
 import sqlite3
 import contextlib
 import numpy as np
@@ -13,8 +13,11 @@ from fuzzywuzzy import fuzz
 from pandas import DataFrame
 from sqlite3 import Connection
 from typing import List, Tuple, Union
+from clickhouse_connect import get_client
+from clickhouse_connect.driver import Client
 from pandas.io.parsers import TextFileReader
 from multiprocessing import Pool, Queue, Value
+from clickhouse_connect.driver.query import QueryResult
 from deep_translator import GoogleTranslator, exceptions
 from inn_api import LegalEntitiesParser, SearchEngineParser
 
@@ -23,6 +26,25 @@ class ReferenceInn(object):
     def __init__(self, filename, directory):
         self.filename: str = filename
         self.directory = directory
+
+    @staticmethod
+    def connect_to_db() -> Tuple[Client, QueryResult]:
+        """
+        Connecting to clickhouse.
+        :return: Client ClickHouse.
+        """
+        try:
+            client: Client = get_client(host=get_my_env_var('HOST'), database=get_my_env_var('DATABASE'),
+                                        username=get_my_env_var('USERNAME_DB'), password=get_my_env_var('PASSWORD'))
+            logger.info("Successfully connect ot db")
+            fts: QueryResult = client.query("SELECT DISTINCT recipients_tin, name_of_the_contract_holder FROM fts")
+            # Чтобы проверить, есть ли данные. Так как переменная образуется, но внутри нее могут быть ошибки.
+            print(fts.result_rows[0])
+        except Exception as ex_connect:
+            logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
+            print("error_connect_db", file=sys.stderr)
+            sys.exit(1)
+        return client, fts
 
     @staticmethod
     def replace_forms_organizations(company_name: str) -> str:
@@ -79,7 +101,8 @@ class ReferenceInn(object):
         data['confidence_rate'] = fuzz_company_name
         logger.info(f"Data was written successfully to the dictionary. Data is {sentence}", pid=os.getpid())
 
-    def get_company_name_by_sentence(self, provider: SearchEngineParser, sentence: str, index: int) -> Tuple[str, str]:
+    def get_company_name_by_sentence(self, provider: SearchEngineParser, sentence: str, index: int) \
+            -> Tuple[dict, str]:
         """
         We send the sentence to the Yandex search engine (first we pre-process: translate it into Russian) by the link
         https://xmlriver.com/search_yandex/xml?user=6390&key=e3b3ac2908b2a9e729f1671218c85e12cfe643b0&query=<value> INN
@@ -91,10 +114,10 @@ class ReferenceInn(object):
         translated: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500])
         translated = self.replace_quotes(translated, quotes=['"', '«', '»', sign], replaced_str=' ')
         translated = re.sub(" +", " ", translated).strip()
-        inn, translated = provider.get_company_name_from_cache(translated, index)
-        return inn, translated
+        api_inn, translated = provider.get_company_name_from_cache(translated, index)
+        return api_inn, translated
 
-    def get_inn_from_row(self, sentence: str, data: dict, index: int) -> None:
+    def get_inn_from_row(self, sentence: str, data: dict, index: int, fts: QueryResult) -> None:
         """
         Full processing of the sentence, including 1). inn search by offer -> company search by inn,
         2). inn search in yandex by request -> company search by inn.
@@ -113,18 +136,33 @@ class ReferenceInn(object):
             self.get_company_name_by_inn(cache_inn, data, inn=list_inn[0], sentence=sentence, index=index)
         else:
             cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", conn)
-            inn, translated = self.get_company_name_by_sentence(cache_name_inn, sentence, index)
-            self.get_company_name_by_inn(cache_inn, data, inn, sentence, translated=translated, index=index)
+            api_inn, translated = self.get_company_name_by_sentence(cache_name_inn, sentence, index)
+            for inn, inn_count in api_inn.items():
+                self.join_fts(fts, data, inn, inn_count)
+                self.get_company_name_by_inn(cache_inn, data, inn, sentence, translated=translated, index=index)
 
-    def write_to_json(self, index: int, data: dict) -> None:
+    @staticmethod
+    def join_fts(fts: QueryResult, data: dict, inn: str, inn_count: int):
+        data['company_inn_count'] = inn_count
+        data["is_fts_found"] = False
+        index_recipients_tin: int = fts.column_names.index('recipients_tin')
+        index_name_of_the_contract_holder: int = fts.column_names.index('name_of_the_contract_holder')
+        for rows in fts.result_rows:
+            if rows[index_recipients_tin] == inn:
+                data["is_fts_found"] = True
+                data["fts_company_name"] = rows[index_name_of_the_contract_holder]
+
+    def write_to_csv(self, index: int, data: dict) -> None:
         """
         Writing data to json.
         """
         basename: str = os.path.basename(self.filename)
         output_file_path: str = os.path.join(self.directory, f'{basename}_{index}.json')
         with open(f"{output_file_path}", 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
-            logger.info(f"Data was written successfully to the file. Index is {index}. Data is {data}", pid=os.getpid())
+            w = csv.DictWriter(f, data.keys())
+            w.writeheader()
+            w.writerow(data)
+        logger.info(f"Data was written successfully to the file. Index is {index}. Data is {data}", pid=os.getpid())
 
     def add_index_in_queue(self, is_queue: bool, sentence: str, index: int) -> None:
         """
@@ -138,7 +176,7 @@ class ReferenceInn(object):
             data_queue: dict = parsed_data[index - 2]
             data_queue['original_file_name'] = os.path.basename(self.filename)
             data_queue['original_file_parsed_on'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            self.write_to_json(index, data_queue)
+            self.write_to_csv(index, data_queue)
 
     @staticmethod
     def stop_parse_data(index: int, ex_interrupt: str) -> None:
@@ -151,14 +189,14 @@ class ReferenceInn(object):
         error_flag.value = 1
         pool.terminate()
 
-    def parse_data(self, index: int, data: dict, is_queue: bool = False) -> None:
+    def parse_data(self, index: int, data: dict, fts: QueryResult, is_queue: bool = False) -> None:
         """
         Processing each row.
         """
         for key, sentence in data.items():
             try:
                 if key == 'company_name':
-                    self.get_inn_from_row(str(sentence), data, index)
+                    self.get_inn_from_row(str(sentence), data, index, fts)
             except (IndexError, ValueError, TypeError, sqlite3.OperationalError) as ex:
                 logger.error(f'Not found inn INN Yandex. Data is {index, sentence} (most likely a foreign company). '
                              f'Exception - {ex}', pid=os.getpid())
@@ -169,7 +207,7 @@ class ReferenceInn(object):
             except Exception as ex_full:
                 logger.error(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}', pid=os.getpid())
                 self.add_index_in_queue(is_queue, sentence, index)
-        self.write_to_json(index, data)
+        self.write_to_csv(index, data)
 
     @staticmethod
     def create_file_for_cache() -> str:
@@ -194,6 +232,9 @@ class ReferenceInn(object):
         dataframe['company_name'] = dataframe['company_name'].replace({'_x000D_': ''}, regex=True)
         dataframe['company_name_rus'] = None
         dataframe['company_inn'] = None
+        dataframe['company_inn_count'] = None
+        dataframe['is_fts_found'] = None
+        dataframe['fts_company_name'] = None
         dataframe['company_name_unified'] = None
         dataframe['company_name_unified_en'] = None
         dataframe['is_inn_found_auto'] = None
@@ -211,12 +252,13 @@ if __name__ == "__main__":
     path: str = reference_inn.create_file_for_cache()
     conn: Connection = sqlite3.connect(path)
     parsed_data: List[dict] = reference_inn.convert_csv_to_dict()
+    client_clickhouse, fts_results = reference_inn.connect_to_db()
     error_flag = Value('i', 0)
     retry_queue: Queue = Queue()
 
     with Pool(processes=WORKER_COUNT) as pool:
         for i, dict_data in enumerate(parsed_data, 2):
-            pool.apply_async(reference_inn.parse_data, (i, dict_data))
+            pool.apply_async(reference_inn.parse_data, (i, dict_data, fts_results))
         logger.info("Processors will be attached and closed. Next, the queue will be processed", pid=os.getpid())
         pool.close()
         pool.join()
@@ -230,6 +272,6 @@ if __name__ == "__main__":
         with Pool(processes=WORKER_COUNT) as pool:
             while not retry_queue.empty():
                 index_queue = retry_queue.get()
-                pool.apply_async(reference_inn.parse_data, (index_queue, parsed_data[index_queue - 2], True))
+                pool.apply_async(reference_inn.parse_data, (index_queue, parsed_data[index_queue - 2], fts_results, True))
             pool.close()
             pool.join()

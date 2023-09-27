@@ -125,7 +125,7 @@ class SearchEngineParser(LegalEntitiesParser):
             last_range = int(myroot[0][index_page][0][0].attrib['last'])
         return myroot, index_page, last_range
 
-    def get_inn_from_search_engine(self, value: str, index: int) -> str:
+    def get_inn_from_search_engine(self, value: str, index: int) -> dict:
         """
         Looking for the INN in the search engine, and then we parse through the sites.
         """
@@ -150,19 +150,20 @@ class SearchEngineParser(LegalEntitiesParser):
                 logger_stream.warning(f"Description {value} not found in the Yandex. Index is {index}. "
                                       f"Exception - {ex}")
         logger.info(f"Dictionary with INN is {dict_inn}. Data is {value}", pid=os.getpid())
-        return max(dict_inn, key=dict_inn.get) if dict_inn else "None"
+        return dict_inn
 
-    def get_company_name_from_cache(self, value: str, index: int) -> Tuple[str, str]:
+    def get_company_name_from_cache(self, value: str, index: int) -> Tuple[dict, str]:
         """
         Getting the INN from the cache, if there is one. Otherwise, we search in the search engine.
         """
         for key in [value]:
-            api_inn: str = self.get_inn_from_search_engine(key, index)
-            with contextlib.suppress(Exception):
-                if api_inn == 'None':
-                    sql_update_query: str = f"""Update {self.table_name} set value = ? where key = ?"""
-                    data: Tuple[str, str] = (api_inn, value)
-                    self.cur.execute(sql_update_query, data)
-                    self.conn.commit()
-            self.cache_add_and_save(value, api_inn)
-        return api_inn, value
+            api_inn: dict = self.get_inn_from_search_engine(key, index)
+            for inn in api_inn.items():
+                with contextlib.suppress(Exception):
+                    if api_inn == 'None':
+                        sql_update_query: str = f"""Update {self.table_name} set value = ? where key = ?"""
+                        data: Tuple[str, str] = (inn[1], value)
+                        self.cur.execute(sql_update_query, data)
+                        self.conn.commit()
+                self.cache_add_and_save(value, inn[1])
+            return api_inn, value

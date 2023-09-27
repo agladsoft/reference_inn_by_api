@@ -1,8 +1,9 @@
 import os
 import logging
 import datetime
+from dotenv import load_dotenv
 
-WORKER_COUNT: int = 4
+WORKER_COUNT: int = 1
 
 USER_XML_RIVER: str = "6390"
 KEY_XML_RIVER: str = "e3b3ac2908b2a9e729f1671218c85e12cfe643b0"
@@ -68,3 +69,17 @@ if logger_stream.hasHandlers():
     logger_stream.handlers.clear()
 logger_stream.addHandler(console_out)
 logger_stream.setLevel(logging.INFO)
+
+
+load_dotenv()
+
+
+def get_my_env_var(var_name: str) -> str:
+    try:
+        return os.environ[var_name]
+    except KeyError as e:
+        raise MissingEnvironmentVariable(f"{var_name} does not exist") from e
+
+
+class MissingEnvironmentVariable(Exception):
+    pass
