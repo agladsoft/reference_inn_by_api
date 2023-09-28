@@ -208,7 +208,6 @@ class ReferenceInn(object):
         for key, sentence in data.items():
             try:
                 if key == 'company_name':
-                    sentence = '16700772663; ATLAS LLCBUILDING 3, 155 100-LETVLADIVOSTOKU AVE.,VLADIVOSTOK, RUSSIAN FEDERATION,690068 PH# +7(423)2933133'
                     self.get_inn_from_row(str(sentence), data, index, fts)
             except (IndexError, ValueError, TypeError, sqlite3.OperationalError) as ex:
                 logger.error(f'Not found inn INN Yandex. Data is {index, sentence} (most likely a foreign company). '
