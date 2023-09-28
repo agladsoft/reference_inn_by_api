@@ -79,7 +79,8 @@ class ReferenceInn(object):
         fuzz_company_name_two: int = fuzz.partial_ratio(company_name_en.upper(), translated.upper())
         return max(fuzz_company_name, fuzz_company_name_two)
 
-    def get_company_name_by_inn(self, fts: QueryResult, provider: LegalEntitiesParser, data: dict, inn: str,
+    def get_company_name_by_inn(self, fts: QueryResult, provider: LegalEntitiesParser, data: dict,
+                                inn: Union[str, None],
                                 sentence: str, index: int, translated: str = None, inn_count: int = 0) -> None:
         """
         We get a unified company name from the sentence itself for the found INN. And then we are looking for a company
@@ -139,12 +140,16 @@ class ReferenceInn(object):
         else:
             cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", conn)
             api_inn, translated = self.get_company_name_by_sentence(cache_name_inn, sentence, index)
-            for inn, inn_count in api_inn.items():
-                self.get_company_name_by_inn(fts, cache_inn, data, inn, sentence, translated=translated, index=index,
-                                             inn_count=inn_count)
+            if api_inn:
+                for inn, inn_count in api_inn.items():
+                    self.get_company_name_by_inn(fts, cache_inn, data, inn, sentence, translated=translated, index=index,
+                                                 inn_count=inn_count)
+            else:
+                self.get_company_name_by_inn(fts, cache_inn, data, None, sentence, translated=translated, index=index,
+                                             inn_count=-1)
 
     @staticmethod
-    def join_fts(fts: QueryResult, data: dict, inn: str, inn_count: int, translated: str):
+    def join_fts(fts: QueryResult, data: dict, inn: Union[str, None], inn_count: int, translated: str):
         data["request_to_yandex"] = f"{translated} ИНН"
         data['company_inn_count'] = inn_count
         data["is_fts_found"] = False
@@ -152,7 +157,7 @@ class ReferenceInn(object):
         index_recipients_tin: int = fts.column_names.index('recipients_tin')
         index_name_of_the_contract_holder: int = fts.column_names.index('name_of_the_contract_holder')
         for rows in fts.result_rows:
-            if rows[index_recipients_tin] == inn:
+            if inn and rows[index_recipients_tin] == inn:
                 data["is_fts_found"] = True
                 data["fts_company_name"] = rows[index_name_of_the_contract_holder]
 
