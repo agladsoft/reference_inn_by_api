@@ -100,6 +100,7 @@ class ReferenceInn(object):
         # fuzz_company_name = self.compare_different_fuzz(company_name, translated, fuzz_company_name, data)
         # data['confidence_rate'] = fuzz_company_name
         logger.info(f"Data was written successfully to the dictionary. Data is {sentence}", pid=os.getpid())
+        self.write_to_csv(index, data)
 
     def get_company_name_by_sentence(self, provider: SearchEngineParser, sentence: str, index: int) \
             -> Tuple[dict, str]:
@@ -140,7 +141,6 @@ class ReferenceInn(object):
             for inn, inn_count in api_inn.items():
                 self.join_fts(fts, data, inn, inn_count + 1, translated)
                 self.get_company_name_by_inn(cache_inn, data, inn, sentence, translated=translated, index=index)
-                self.write_to_csv(index, data)
 
     @staticmethod
     def join_fts(fts: QueryResult, data: dict, inn: str, inn_count: int, translated: str):
@@ -207,6 +207,7 @@ class ReferenceInn(object):
         for key, sentence in data.items():
             try:
                 if key == 'company_name':
+                    sentence = '"AKVATORYA  L.T.D." INN7825692852 RUSSIA,195279,SAINT-PETERSBURG,SHOS SE REVOLUTCII,69, BUILDING 6, LIT. A. TEL:+7812 605 00 55'
                     self.get_inn_from_row(str(sentence), data, index, fts)
             except (IndexError, ValueError, TypeError, sqlite3.OperationalError) as ex:
                 logger.error(f'Not found inn INN Yandex. Data is {index, sentence} (most likely a foreign company). '
