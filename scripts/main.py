@@ -3,13 +3,12 @@ import sys
 import time
 import sqlite3
 import contextlib
-from csv import DictWriter
-
 import numpy as np
 import validate_inn
 import pandas as pd
 from __init__ import *
 from pathlib import Path
+from csv import DictWriter
 from fuzzywuzzy import fuzz
 from pandas import DataFrame
 from sqlite3 import Connection
