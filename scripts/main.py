@@ -219,6 +219,7 @@ class ReferenceInn(object):
                              f'Exception - {ex}', pid=os.getpid())
                 logger_stream.error(f'Not found INN in Yandex. Data is {index, sentence} '
                                     f'(most likely a foreign company). Exception - {ex}')
+                self.write_to_csv(index, data)
             except (exceptions.TooManyRequests, AssertionError) as ex_interrupt:
                 self.stop_parse_data(index, ex_interrupt)
             except Exception as ex_full:
