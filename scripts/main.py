@@ -79,12 +79,13 @@ class ReferenceInn(object):
         fuzz_company_name_two: int = fuzz.partial_ratio(company_name_en.upper(), translated.upper())
         return max(fuzz_company_name, fuzz_company_name_two)
 
-    def get_company_name_by_inn(self, provider: LegalEntitiesParser, data: dict, inn: str, sentence: str, index: int,
-                                translated: str = None) -> None:
+    def get_company_name_by_inn(self, fts: QueryResult, provider: LegalEntitiesParser, data: dict, inn: str, sentence: str, index: int,
+                                translated: str = None, inn_count: int = 0) -> None:
         """
         We get a unified company name from the sentence itself for the found INN. And then we are looking for a company
         on the website https://www.rusprofile.ru/.
         """
+        self.join_fts(fts, data, inn, inn_count + 1, translated)
         if not translated:
             translated: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500] + " ")
         data['is_inn_found_auto'] = True
@@ -134,13 +135,13 @@ class ReferenceInn(object):
         data['original_file_name'] = os.path.basename(self.filename)
         data['original_file_parsed_on'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         if list_inn:
-            self.get_company_name_by_inn(cache_inn, data, inn=list_inn[0], sentence=sentence, index=index)
+            self.get_company_name_by_inn(fts, cache_inn, data, inn=list_inn[0], sentence=sentence, index=index)
         else:
             cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", conn)
             api_inn, translated = self.get_company_name_by_sentence(cache_name_inn, sentence, index)
             for inn, inn_count in api_inn.items():
-                self.join_fts(fts, data, inn, inn_count + 1, translated)
-                self.get_company_name_by_inn(cache_inn, data, inn, sentence, translated=translated, index=index)
+                self.get_company_name_by_inn(cache_inn, data, inn, sentence, translated=translated, index=index,
+                                             inn_count=inn_count)
 
     @staticmethod
     def join_fts(fts: QueryResult, data: dict, inn: str, inn_count: int, translated: str):
@@ -207,7 +208,6 @@ class ReferenceInn(object):
         for key, sentence in data.items():
             try:
                 if key == 'company_name':
-                    sentence = '"AKVATORYA  L.T.D." INN7825692852 RUSSIA,195279,SAINT-PETERSBURG,SHOS SE REVOLUTCII,69, BUILDING 6, LIT. A. TEL:+7812 605 00 55'
                     self.get_inn_from_row(str(sentence), data, index, fts)
             except (IndexError, ValueError, TypeError, sqlite3.OperationalError) as ex:
                 logger.error(f'Not found inn INN Yandex. Data is {index, sentence} (most likely a foreign company). '
