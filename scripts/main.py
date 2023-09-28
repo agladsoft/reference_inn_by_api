@@ -115,6 +115,7 @@ class ReferenceInn(object):
             cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", conn)
             inn, translated = self.get_company_name_by_sentence(cache_name_inn, sentence, index)
             self.get_company_name_by_inn(cache_inn, data, inn, sentence, translated=translated, index=index)
+        self.write_to_json(index, data)
 
     def write_to_json(self, index: int, data: dict) -> None:
         """
@@ -164,12 +165,12 @@ class ReferenceInn(object):
                              f'Exception - {ex}', pid=os.getpid())
                 logger_stream.error(f'Not found INN in Yandex. Data is {index, sentence} '
                                     f'(most likely a foreign company). Exception - {ex}')
+                self.write_to_json(index, data)
             except (exceptions.TooManyRequests, AssertionError) as ex_interrupt:
                 self.stop_parse_data(index, ex_interrupt)
             except Exception as ex_full:
                 logger.error(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}', pid=os.getpid())
                 self.add_index_in_queue(is_queue, sentence, index)
-        self.write_to_json(index, data)
 
     @staticmethod
     def create_file_for_cache() -> str:
