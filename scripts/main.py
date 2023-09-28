@@ -79,8 +79,8 @@ class ReferenceInn(object):
         fuzz_company_name_two: int = fuzz.partial_ratio(company_name_en.upper(), translated.upper())
         return max(fuzz_company_name, fuzz_company_name_two)
 
-    def get_company_name_by_inn(self, fts: QueryResult, provider: LegalEntitiesParser, data: dict, inn: str, sentence: str, index: int,
-                                translated: str = None, inn_count: int = 0) -> None:
+    def get_company_name_by_inn(self, fts: QueryResult, provider: LegalEntitiesParser, data: dict, inn: str,
+                                sentence: str, index: int, translated: str = None, inn_count: int = 0) -> None:
         """
         We get a unified company name from the sentence itself for the found INN. And then we are looking for a company
         on the website https://www.rusprofile.ru/.
@@ -140,7 +140,7 @@ class ReferenceInn(object):
             cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", conn)
             api_inn, translated = self.get_company_name_by_sentence(cache_name_inn, sentence, index)
             for inn, inn_count in api_inn.items():
-                self.get_company_name_by_inn(cache_inn, data, inn, sentence, translated=translated, index=index,
+                self.get_company_name_by_inn(fts, cache_inn, data, inn, sentence, translated=translated, index=index,
                                              inn_count=inn_count)
 
     @staticmethod
@@ -208,6 +208,7 @@ class ReferenceInn(object):
         for key, sentence in data.items():
             try:
                 if key == 'company_name':
+                    sentence = '16700772663; ATLAS LLCBUILDING 3, 155 100-LETVLADIVOSTOKU AVE.,VLADIVOSTOK, RUSSIAN FEDERATION,690068 PH# +7(423)2933133'
                     self.get_inn_from_row(str(sentence), data, index, fts)
             except (IndexError, ValueError, TypeError, sqlite3.OperationalError) as ex:
                 logger.error(f'Not found inn INN Yandex. Data is {index, sentence} (most likely a foreign company). '
