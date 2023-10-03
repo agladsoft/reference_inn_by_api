@@ -145,7 +145,7 @@ class ReferenceInn(object):
     @staticmethod
     def join_fts(fts: QueryResult, data: dict, inn: Union[str, None], inn_count: int, translated: str):
         """
-
+        Join FTS for checking INN.
         """
         data["request_to_yandex"] = f"{translated} ИНН"
         data['company_inn_count'] = inn_count
