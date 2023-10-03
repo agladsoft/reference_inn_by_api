@@ -8,7 +8,8 @@ from requests import Response
 from typing import Union, Tuple
 from requests_html import HTMLSession
 import xml.etree.ElementTree as ElemTree
-from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE
+from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE, \
+    get_my_env_var
 
 
 class MyError(Exception):
@@ -20,8 +21,8 @@ class MyError(Exception):
 
 class LegalEntitiesParser(object):
 
-    def get_company_name_from_cache(self, inn: str, index: int) -> \
-            Tuple[Union[str, None], Union[list, None], bool]:
+    def get_company_name_by_inn(self, inn: str, index: int) -> \
+            Tuple[Union[str, None], Union[str, None], bool]:
         """
         Getting the company name unified from the cache, if there is one.
         Otherwise, we are looking for verification of legal entities on websites.
@@ -29,7 +30,7 @@ class LegalEntitiesParser(object):
         data: dict = {
             "inn": inn
         }
-        response: Response = requests.post("http://service_inn:8003", json=data)
+        response: Response = requests.post(f"http://{get_my_env_var('HOST')}:8003", json=data)
         if response.status_code == 200:
             data = response.json()
             return inn, data[0][0]['value'], data[1]
@@ -152,7 +153,7 @@ class SearchEngineParser(LegalEntitiesParser):
         logger.info(f"Dictionary with INN is {dict_inn}. Data is {value}", pid=os.getpid())
         return dict_inn
 
-    def get_company_name_from_cache(self, value: str, index: int) -> Tuple[dict, str]:
+    def get_company_name_by_inn(self, value: str, index: int) -> dict:
         """
         Getting the INN from the cache, if there is one. Otherwise, we search in the search engine.
         """
@@ -166,4 +167,4 @@ class SearchEngineParser(LegalEntitiesParser):
                         self.cur.execute(sql_update_query, data)
                         self.conn.commit()
                 self.cache_add_and_save(value, inn[1])
-            return api_inn, value
+            return api_inn
