@@ -83,12 +83,12 @@ class ReferenceInn(object):
         data['confidence_rate'] = max(fuzz_company_name, fuzz_company_name_two)
 
     def get_all_data(self, fts: QueryResult, provider: LegalEntitiesParser, data: dict, inn: Union[str, None],
-                     sentence: str, index: int, translated: str = None, inn_count: int = 0) -> None:
+                     sentence: str, index: int, num_inn_in_fts, translated: str = None, inn_count: int = 0) -> None:
         """
         We get a unified company name from the sentence itself for the found INN. And then we are looking for a company
         on the website https://www.rusprofile.ru/.
         """
-        self.join_fts(fts, data, inn, inn_count + 1, translated)
+        self.join_fts(fts, data, inn, inn_count + 1, num_inn_in_fts, translated)
         data['company_name_rus'] = translated
         inn, company_name, is_cache = provider.get_company_name_by_inn(inn, index)
         data["company_inn"] = inn
@@ -96,7 +96,6 @@ class ReferenceInn(object):
         self.compare_different_fuzz(company_name, translated, data)
         logger.info(f"Data was written successfully to the dictionary. Data is {sentence}", pid=os.getpid())
         self.write_to_csv(index, data)
-        self.write_to_json(index, data)
 
     def get_translated_sentence(self, sentence: str) -> str:
         """
@@ -132,18 +131,21 @@ class ReferenceInn(object):
         Getting company name from dadata or get inn from Yandex, then get company name from dadata.
         """
         translated: str = self.get_translated_sentence(sentence)
+        num_inn_in_fts: List[int] = [0]
         if list_inn:
-            self.get_all_data(fts, cache_inn, data, list_inn[0], sentence, index, translated)
+            self.get_all_data(fts, cache_inn, data, list_inn[0], sentence, index, num_inn_in_fts, translated)
         else:
             cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", conn)
             if api_inn := cache_name_inn.get_company_name_by_inn(translated, index):
                 for inn, inn_count in api_inn.items():
-                    self.get_all_data(fts, cache_inn, data, inn, sentence, index, translated, inn_count)
+                    self.get_all_data(fts, cache_inn, data, inn, sentence, index, num_inn_in_fts, translated, inn_count)
             else:
-                self.get_all_data(fts, cache_inn, data, None, sentence, index, translated, inn_count=-1)
+                self.get_all_data(fts, cache_inn, data, None, sentence, index, num_inn_in_fts, translated, inn_count=-1)
+        self.write_to_json(index, data)
 
     @staticmethod
-    def join_fts(fts: QueryResult, data: dict, inn: Union[str, None], inn_count: int, translated: str):
+    def join_fts(fts: QueryResult, data: dict, inn: Union[str, None], inn_count: int, num_inn_in_fts: List[int],
+                 translated: str) -> None:
         """
         Join FTS for checking INN.
         """
@@ -156,6 +158,8 @@ class ReferenceInn(object):
         for rows in fts.result_rows:
             if inn and rows[index_recipients_tin] == inn:
                 data["is_fts_found"] = True
+                num_inn_in_fts[0] += 1
+                data["number_inn_in_fts"] = num_inn_in_fts[0]
                 data["fts_company_name"] = rows[index_name_of_the_contract_holder]
 
     @staticmethod
@@ -193,7 +197,7 @@ class ReferenceInn(object):
         Adding an index to the queue or writing empty data.
         """
         if not is_queue:
-            logger.error(f"An error occured in which the processor was added to the queue. Index is {index}. "
+            logger.error(f"An error occurred in which the processor was added to the queue. Index is {index}. "
                          f"Data is {sentence}", pid=os.getpid())
             retry_queue.put(index)
         else:
@@ -201,11 +205,12 @@ class ReferenceInn(object):
             data_queue['original_file_name'] = os.path.basename(self.filename)
             data_queue['original_file_parsed_on'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.write_to_csv(index, data_queue)
+            self.write_to_json(index, data_queue)
 
     @staticmethod
     def stop_parse_data(index: int, ex_interrupt: str) -> None:
         """
-
+        Exit from processor.
         """
         error_message: str = f'Too many requests to the translator. Exception - {ex_interrupt}'
         logger.error(error_message, pid=os.getpid())
