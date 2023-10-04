@@ -13,8 +13,8 @@ from csv import DictWriter
 from fuzzywuzzy import fuzz
 from pandas import DataFrame
 from sqlite3 import Connection
-from typing import List, Tuple, Union
 from clickhouse_connect import get_client
+from typing import List, Tuple, Union, Dict
 from clickhouse_connect.driver import Client
 from pandas.io.parsers import TextFileReader
 from multiprocessing import Pool, Queue, Value
@@ -83,23 +83,26 @@ class ReferenceInn(object):
         data['confidence_rate'] = max(fuzz_company_name, fuzz_company_name_two)
 
     def get_all_data(self, fts: QueryResult, provider: LegalEntitiesParser, data: dict, inn: Union[str, None],
-                     sentence: str, index: int, num_inn_in_fts, translated: str = None, inn_count: int = 0) -> None:
+                     sentence: str, index: int, num_inn_in_fts: dict, list_inn_in_fts: list, translated: str = None,
+                     inn_count: int = 0) -> None:
         """
         We get a unified company name from the sentence itself for the found INN. And then we are looking for a company
         on the website https://www.rusprofile.ru/.
         """
         self.join_fts(fts, data, inn, inn_count + 1, num_inn_in_fts, translated)
         data['company_name_rus'] = translated
+        data["number_inn_in_fts"] = num_inn_in_fts["num_inn_in_fts"]
         inn, company_name, is_cache = provider.get_company_name_by_inn(inn, index)
         data["company_inn"] = inn
         data["company_name_unified"] = company_name
         self.compare_different_fuzz(company_name, translated, data)
         logger.info(f"Data was written successfully to the dictionary. Data is {sentence}", pid=os.getpid())
         self.write_to_csv(index, data)
+        list_inn_in_fts.append(data.copy())
 
     def get_translated_sentence(self, sentence: str) -> str:
         """
-
+        Getting translated sentence.
         """
         sign: str = '/'
         sentence: str = sentence.translate({ord(c): " " for c in r".,!@#$%^&*()[]{};?\|~=_+"})
@@ -131,20 +134,41 @@ class ReferenceInn(object):
         Getting company name from dadata or get inn from Yandex, then get company name from dadata.
         """
         translated: str = self.get_translated_sentence(sentence)
-        num_inn_in_fts: List[int] = [0]
+        list_inn_in_fts: List[dict] = []
+        num_inn_in_fts: Dict[str, int] = {"num_inn_in_fts": 0}
         if list_inn:
-            self.get_all_data(fts, cache_inn, data, list_inn[0], sentence, index, num_inn_in_fts, translated)
+            self.get_all_data(fts, cache_inn, data, list_inn[0], sentence, index, num_inn_in_fts, list_inn_in_fts,
+                              translated)
         else:
             cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", conn)
             if api_inn := cache_name_inn.get_company_name_by_inn(translated, index):
                 for inn, inn_count in api_inn.items():
-                    self.get_all_data(fts, cache_inn, data, inn, sentence, index, num_inn_in_fts, translated, inn_count)
+                    self.get_all_data(fts, cache_inn, data, inn, sentence, index, num_inn_in_fts, list_inn_in_fts,
+                                      translated, inn_count)
             else:
-                self.get_all_data(fts, cache_inn, data, None, sentence, index, num_inn_in_fts, translated, inn_count=-1)
-        self.write_to_json(index, data)
+                self.get_all_data(fts, cache_inn, data, None, sentence, index, num_inn_in_fts, list_inn_in_fts,
+                                  translated, inn_count=-1)
+        self.write_existing_inn_from_fts(index, list_inn_in_fts, num_inn_in_fts)
+
+    def write_existing_inn_from_fts(self, index: int, list_inn_in_fts: list, num_inn_in_fts: dict) -> None:
+        """
+
+        """
+        list_is_found_fts: List[bool] = []
+        for dict_inn in list_inn_in_fts:
+            dict_inn["number_inn_in_fts"] = num_inn_in_fts["num_inn_in_fts"]
+            if dict_inn["is_fts_found"]:
+                self.write_to_json(index, dict_inn)
+                list_is_found_fts.append(True)
+                break
+            else:
+                list_is_found_fts.append(False)
+        if not all(list_is_found_fts):
+            max_dict_inn: dict = max(list_inn_in_fts, key=lambda x: x["company_inn_count"])
+            self.write_to_json(index, max_dict_inn)
 
     @staticmethod
-    def join_fts(fts: QueryResult, data: dict, inn: Union[str, None], inn_count: int, num_inn_in_fts: List[int],
+    def join_fts(fts: QueryResult, data: dict, inn: Union[str, None], inn_count: int, num_inn_in_fts: Dict[str, int],
                  translated: str) -> None:
         """
         Join FTS for checking INN.
@@ -158,8 +182,7 @@ class ReferenceInn(object):
         for rows in fts.result_rows:
             if inn and rows[index_recipients_tin] == inn:
                 data["is_fts_found"] = True
-                num_inn_in_fts[0] += 1
-                data["number_inn_in_fts"] = num_inn_in_fts[0]
+                num_inn_in_fts["num_inn_in_fts"] += 1
                 data["fts_company_name"] = rows[index_name_of_the_contract_holder]
 
     @staticmethod
