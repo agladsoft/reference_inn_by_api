@@ -141,7 +141,7 @@ class SearchEngineParser(LegalEntitiesParser):
         logger.info(f"After request. Data is {value}", pid=os.getpid())
         myroot, index_page, last_range = self.parse_xml(r, index, value)
         dict_inn: dict = {}
-        count_inn: int = 0
+        count_inn: int = 1
         for results in range(1, last_range):
             try:
                 self.get_inn_from_html(myroot, index_page, results, dict_inn, count_inn)

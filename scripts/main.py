@@ -84,14 +84,15 @@ class ReferenceInn(object):
 
     def get_all_data(self, fts: QueryResult, provider: LegalEntitiesParser, data: dict, inn: Union[str, None],
                      sentence: str, index: int, num_inn_in_fts: dict, list_inn_in_fts: list, translated: str = None,
-                     inn_count: int = 0) -> None:
+                     inn_count: int = 1) -> None:
         """
         We get a unified company name from the sentence itself for the found INN. And then we are looking for a company
         on the website https://www.rusprofile.ru/.
         """
-        self.join_fts(fts, data, inn, inn_count + 1, num_inn_in_fts, translated)
+        self.join_fts(fts, data, inn, inn_count, num_inn_in_fts, translated)
         data['company_name_rus'] = translated
-        data["count_inn_in_fts"] = num_inn_in_fts["num_inn_in_fts"]
+        data["company_inn_max_rank"] = num_inn_in_fts["company_inn_max_rank"]
+        num_inn_in_fts["company_inn_max_rank"] += 1
         inn, company_name, is_cache = provider.get_company_name_by_inn(inn, index)
         data["company_inn"] = inn
         data["company_name_unified"] = company_name
@@ -135,19 +136,20 @@ class ReferenceInn(object):
         """
         translated: str = self.get_translated_sentence(sentence)
         list_inn_in_fts: List[dict] = []
-        num_inn_in_fts: Dict[str, int] = {"num_inn_in_fts": 0}
+        num_inn_in_fts: Dict[str, int] = {"num_inn_in_fts": 0, "company_inn_max_rank": 1}
         if list_inn:
             self.get_all_data(fts, cache_inn, data, list_inn[0], sentence, index, num_inn_in_fts, list_inn_in_fts,
                               translated)
         else:
             cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", conn)
             if api_inn := cache_name_inn.get_company_name_by_inn(translated, index):
+                data["sum_count_inn"] = sum(api_inn.values())
                 for inn, inn_count in api_inn.items():
                     self.get_all_data(fts, cache_inn, data, inn, sentence, index, num_inn_in_fts, list_inn_in_fts,
                                       translated, inn_count)
             else:
                 self.get_all_data(fts, cache_inn, data, None, sentence, index, num_inn_in_fts, list_inn_in_fts,
-                                  translated, inn_count=-1)
+                                  translated, inn_count=0)
         self.write_existing_inn_from_fts(index, list_inn_in_fts, num_inn_in_fts)
 
     def write_existing_inn_from_fts(self, index: int, list_inn_in_fts: list, num_inn_in_fts: dict) -> None:
