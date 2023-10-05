@@ -47,6 +47,11 @@ class ReferenceInn(object):
             sys.exit(1)
         return client, fts
 
+    def push_data_to_db(self):
+        """
+
+        """
+
     @staticmethod
     def replace_forms_organizations(company_name: str) -> str:
         """
@@ -200,7 +205,7 @@ class ReferenceInn(object):
         Writing data to json.
         """
         basename: str = os.path.basename(self.filename)
-        output_file_path: str = os.path.join(self.directory, f'{basename}')
+        output_file_path: str = os.path.join(self.directory, f'{basename}_{data["original_file_parsed_on"]}')
         if os.path.exists(output_file_path):
             self.to_csv(output_file_path, data, 'a')
         else:
@@ -243,17 +248,17 @@ class ReferenceInn(object):
         error_flag.value = 1
         pool.terminate()
 
-    def add_new_columns(self, data: dict):
+    def add_new_columns(self, data: dict, start_time_script: str):
         data['is_inn_found_auto'] = True
         data["is_company_name_from_cache"] = False
         data['original_file_name'] = os.path.basename(self.filename)
-        data['original_file_parsed_on'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        data['original_file_parsed_on'] = start_time_script
 
-    def parse_data(self, index: int, data: dict, fts: QueryResult, is_queue: bool = False) -> None:
+    def parse_data(self, index: int, data: dict, fts: QueryResult, start_time_script, is_queue: bool = False) -> None:
         """
         Processing each row.
         """
-        self.add_new_columns(data)
+        self.add_new_columns(data, start_time_script)
         sentence: str = data.get("company_name")
         try:
             self.get_inn_from_row(str(sentence), data, index, fts)
@@ -303,10 +308,11 @@ if __name__ == "__main__":
     client_clickhouse, fts_results = reference_inn.connect_to_db()
     error_flag = Value('i', 0)
     retry_queue: Queue = Queue()
+    start_time: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     with Pool(processes=WORKER_COUNT) as pool:
         for i, dict_data in enumerate(not_parsed_data, 2):
-            pool.apply_async(reference_inn.parse_data, (i, dict_data, fts_results))
+            pool.apply_async(reference_inn.parse_data, (i, dict_data, fts_results, start_time))
         pool.close()
         pool.join()
     logger.info(f"All rows have been processed. Is the queue empty? {retry_queue.empty()}", pid=os.getpid())
@@ -320,7 +326,9 @@ if __name__ == "__main__":
             while not retry_queue.empty():
                 index_queue = retry_queue.get()
                 pool.apply_async(reference_inn.parse_data,
-                                 (index_queue, not_parsed_data[index_queue - 2], fts_results, True))
+                                 (index_queue, not_parsed_data[index_queue - 2], fts_results, start_time, True))
             pool.close()
             pool.join()
+    logger.info("Push data to db")
+
     logger.info("The script has completed its work")
