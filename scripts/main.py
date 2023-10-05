@@ -47,10 +47,16 @@ class ReferenceInn(object):
             sys.exit(1)
         return client, fts
 
-    def push_data_to_db(self):
+    def push_data_to_db(self, start_time_script: str):
         """
 
         """
+        client: Client = get_client(host="10.23.4.203", database="default",
+                                    username="default", password=get_my_env_var('PASSWORD'))
+        basename: str = os.path.basename(self.filename)
+        output_file_path: str = os.path.join(self.directory, f'{start_time_script}_{basename}')
+        df: DataFrame = pd.read_csv(output_file_path)
+        client.insert_df("reference_inn_all", df, database="default")
 
     @staticmethod
     def replace_forms_organizations(company_name: str) -> str:
@@ -205,7 +211,7 @@ class ReferenceInn(object):
         Writing data to json.
         """
         basename: str = os.path.basename(self.filename)
-        output_file_path: str = os.path.join(self.directory, f'{basename}_{data["original_file_parsed_on"]}')
+        output_file_path: str = os.path.join(self.directory, f'{data["original_file_parsed_on"]}_{basename}')
         if os.path.exists(output_file_path):
             self.to_csv(output_file_path, data, 'a')
         else:
@@ -330,5 +336,5 @@ if __name__ == "__main__":
             pool.close()
             pool.join()
     logger.info("Push data to db")
-
+    reference_inn.push_data_to_db(start_time)
     logger.info("The script has completed its work")
