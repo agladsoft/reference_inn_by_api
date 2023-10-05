@@ -91,7 +91,7 @@ class ReferenceInn(object):
         """
         self.join_fts(fts, data, inn, inn_count + 1, num_inn_in_fts, translated)
         data['company_name_rus'] = translated
-        data["number_inn_in_fts"] = num_inn_in_fts["num_inn_in_fts"]
+        data["count_inn_in_fts"] = num_inn_in_fts["num_inn_in_fts"]
         inn, company_name, is_cache = provider.get_company_name_by_inn(inn, index)
         data["company_inn"] = inn
         data["company_name_unified"] = company_name
@@ -156,7 +156,7 @@ class ReferenceInn(object):
         """
         list_is_found_fts: List[bool] = []
         for dict_inn in list_inn_in_fts:
-            dict_inn["number_inn_in_fts"] = num_inn_in_fts["num_inn_in_fts"]
+            dict_inn["count_inn_in_fts"] = num_inn_in_fts["num_inn_in_fts"]
             if dict_inn["is_fts_found"]:
                 self.write_to_json(index, dict_inn)
                 list_is_found_fts.append(True)
