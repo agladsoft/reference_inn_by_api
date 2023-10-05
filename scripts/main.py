@@ -154,7 +154,7 @@ class ReferenceInn(object):
 
     def write_existing_inn_from_fts(self, index: int, list_inn_in_fts: list, num_inn_in_fts: dict) -> None:
         """
-
+        Write data inn in files.
         """
         list_is_found_fts: List[bool] = []
         for dict_inn in list_inn_in_fts:
