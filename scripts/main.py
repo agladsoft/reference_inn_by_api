@@ -54,7 +54,8 @@ class ReferenceInn(object):
         client: Client = get_client(host="clickhouse", database="default",
                                     username="default", password=get_my_env_var('PASSWORD'))
         basename: str = os.path.basename(self.filename)
-        output_file_path: str = os.path.join(self.directory, f'{start_time_script}_{basename}')
+        output_file_path: str = os.path.join(f"{os.path.dirname(self.directory)}/csv",
+                                             f'{start_time_script}_{basename}')
         df: DataFrame = pd.read_csv(output_file_path, dtype={"company_inn": str, "confidence_rate": "Int64"})
         df = df.replace({np.nan: None, "NaT": None})
         client.insert_df("reference_inn_all", df, database="default")
@@ -213,7 +214,8 @@ class ReferenceInn(object):
         Writing data to json.
         """
         basename: str = os.path.basename(self.filename)
-        output_file_path: str = os.path.join(self.directory, f'{data["original_file_parsed_on"]}_{basename}')
+        output_file_path: str = os.path.join(f"{os.path.dirname(self.directory)}/csv",
+                                             f'{data["original_file_parsed_on"]}_{basename}')
         if os.path.exists(output_file_path):
             self.to_csv(output_file_path, data, 'a')
         else:
