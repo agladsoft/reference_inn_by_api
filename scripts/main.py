@@ -95,11 +95,12 @@ class ReferenceInn(object):
 
     def get_all_data(self, fts: QueryResult, provider: LegalEntitiesParser, data: dict, inn: Union[str, None],
                      sentence: str, index: int, num_inn_in_fts: dict, list_inn_in_fts: list, translated: str = None,
-                     inn_count: int = 1) -> None:
+                     inn_count: int = 1, sum_count_inn: int = 1) -> None:
         """
         We get a unified company name from the sentence itself for the found INN. And then we are looking for a company
         on the website https://www.rusprofile.ru/.
         """
+        data["sum_count_inn"] = sum_count_inn
         self.join_fts(fts, data, inn, inn_count, num_inn_in_fts, translated)
         data['company_name_rus'] = translated
         data["company_inn_max_rank"] = num_inn_in_fts["company_inn_max_rank"]
@@ -154,13 +155,13 @@ class ReferenceInn(object):
         else:
             cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", conn)
             if api_inn := cache_name_inn.get_company_name_by_inn(translated, index):
-                data["sum_count_inn"] = sum(api_inn.values())
+                sum_count_inn: int = sum(api_inn.values())
                 for inn, inn_count in api_inn.items():
                     self.get_all_data(fts, cache_inn, data, inn, sentence, index, num_inn_in_fts, list_inn_in_fts,
-                                      translated, inn_count)
+                                      translated, inn_count, sum_count_inn)
             else:
                 self.get_all_data(fts, cache_inn, data, None, sentence, index, num_inn_in_fts, list_inn_in_fts,
-                                  translated, inn_count=0)
+                                  translated, inn_count=0, sum_count_inn=0)
         self.write_existing_inn_from_fts(index, list_inn_in_fts, num_inn_in_fts)
 
     def write_existing_inn_from_fts(self, index: int, list_inn_in_fts: list, num_inn_in_fts: dict) -> None:
