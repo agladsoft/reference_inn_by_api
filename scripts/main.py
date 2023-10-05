@@ -49,7 +49,7 @@ class ReferenceInn(object):
 
     def push_data_to_db(self, start_time_script: str):
         """
-
+        Push all data to clickhouse.
         """
         client: Client = get_client(host="clickhouse", database="default",
                                     username="default", password=get_my_env_var('PASSWORD'))
