@@ -51,7 +51,7 @@ class ReferenceInn(object):
         """
 
         """
-        client: Client = get_client(host="10.23.4.203", database="default",
+        client: Client = get_client(host="clickhouse", database="default",
                                     username="default", password=get_my_env_var('PASSWORD'))
         basename: str = os.path.basename(self.filename)
         output_file_path: str = os.path.join(self.directory, f'{start_time_script}_{basename}')
