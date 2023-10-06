@@ -327,6 +327,7 @@ class ReferenceInn(object):
                 sys.exit(1)
         except requests.exceptions.RequestException as e:
             logger.error(f"An error occurred while receiving data from xmlriver. Exception is {e}")
+            logger_stream.error("ошибка_при_получении_баланса_яндекса")
             sys.exit(1)
 
 
