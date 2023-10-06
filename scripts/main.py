@@ -218,7 +218,7 @@ class ReferenceInn(object):
                                                    f"?user={USER_XML_RIVER}&key={KEY_XML_RIVER}")
             response_balance.raise_for_status()
             response_cost.raise_for_status()
-            if float(response_balance.text) > len(parsed_data_) * (float(response_cost.text) / 1000):
+            if float(response_balance.text) < len(parsed_data_) * (float(response_cost.text) / 1000):
                 logger.error("There is not enough money to process all the lines. Please top up your account")
                 logger_stream.error("не_хватает_денег_для_обработки_файла")
                 sys.exit(1)
