@@ -3,6 +3,7 @@ import sys
 import time
 import json
 import sqlite3
+import requests
 import contextlib
 import numpy as np
 import validate_inn
@@ -11,6 +12,7 @@ from __init__ import *
 from pathlib import Path
 from fuzzywuzzy import fuzz
 from pandas import DataFrame
+from requests import Response
 from sqlite3 import Connection
 from typing import List, Tuple, Union
 from pandas.io.parsers import TextFileReader
@@ -204,6 +206,26 @@ class ReferenceInn(object):
         dataframe['is_company_name_from_cache'] = None
         return dataframe.to_dict('records')
 
+    @staticmethod
+    def is_enough_money_to_search_engine(parsed_data_: List[dict]):
+        """
+        Check whether there is enough money in the wallet to process the current file.
+        """
+        try:
+            response_balance: Response = requests.get(f"https://xmlriver.com/api/get_balance/yandex/"
+                                                      f"?user={USER_XML_RIVER}&key={KEY_XML_RIVER}")
+            response_cost: Response = requests.get(f"https://xmlriver.com/api/get_cost/yandex/"
+                                                   f"?user={USER_XML_RIVER}&key={KEY_XML_RIVER}")
+            response_balance.raise_for_status()
+            response_cost.raise_for_status()
+            if float(response_balance.text) > len(parsed_data_) * (float(response_cost.text) / 1000):
+                logger.error("There is not enough money to process all the lines. Please top up your account")
+                logger_stream.error("не_хватает_денег_для_обработки_файла")
+                sys.exit(1)
+        except requests.exceptions.RequestException as e:
+            logger.error(f"An error occurred while receiving data from xmlriver. Exception is {e}")
+            sys.exit(1)
+
 
 if __name__ == "__main__":
     logger.info("The script has started its work")
@@ -214,6 +236,7 @@ if __name__ == "__main__":
     parsed_data: List[dict] = reference_inn.convert_csv_to_dict()
     error_flag = Value('i', 0)
     retry_queue: Queue = Queue()
+    reference_inn.is_enough_money_to_search_engine(parsed_data)
 
     with Pool(processes=WORKER_COUNT) as pool:
         for i, dict_data in enumerate(parsed_data, 2):
