@@ -157,14 +157,13 @@ class SearchEngineParser(LegalEntitiesParser):
         """
         Getting the INN from the cache, if there is one. Otherwise, we search in the search engine.
         """
-        for key in [value]:
-            api_inn: dict = self.get_inn_from_search_engine(key, index)
-            for inn in api_inn.items():
-                with contextlib.suppress(Exception):
-                    if api_inn == 'None':
-                        sql_update_query: str = f"""Update {self.table_name} set value = ? where key = ?"""
-                        data: Tuple[str, str] = (inn[1], value)
-                        self.cur.execute(sql_update_query, data)
-                        self.conn.commit()
-                self.cache_add_and_save(value, inn[1])
-            return api_inn
+        api_inn: dict = self.get_inn_from_search_engine(value, index)
+        for inn in api_inn.items():
+            with contextlib.suppress(Exception):
+                if api_inn == 'None':
+                    sql_update_query: str = f"""Update {self.table_name} set value = ? where key = ?"""
+                    data: Tuple[str, str] = (inn[1], value)
+                    self.cur.execute(sql_update_query, data)
+                    self.conn.commit()
+            self.cache_add_and_save(value, inn[1])
+        return api_inn

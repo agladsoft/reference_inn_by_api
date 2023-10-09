@@ -104,6 +104,8 @@ class ReferenceInn(object):
         We get a unified company name from the sentence itself for the found INN. And then we are looking for a company
         on the website https://www.rusprofile.ru/.
         """
+        logger.info(f"The processing and filling of data into the dictionary has begun. Data is {sentence}",
+                    pid=os.getpid())
         data["sum_count_inn"] = sum_count_inn
         self.join_fts(fts, data, inn, inn_count, num_inn_in_fts, translated)
         data['company_name_rus'] = translated
@@ -125,6 +127,7 @@ class ReferenceInn(object):
         sentence: str = sentence.translate({ord(c): " " for c in r".,!@#$%^&*()[]{};?\|~=_+"})
         sentence = self.replace_quotes(sentence, replaced_str=' ')
         sentence = re.sub(" +", " ", sentence).strip() + sign
+        logger.info(f"Try translate sentence to russian. Data is {sentence}", pid=os.getpid())
         translated: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500])
         translated = self.replace_quotes(translated, quotes=['"', '«', '»', sign], replaced_str=' ')
         translated = re.sub(" +", " ", translated).strip()
@@ -143,6 +146,9 @@ class ReferenceInn(object):
             with contextlib.suppress(Exception):
                 item_inn2 = validate_inn.validate(item_inn)
                 list_inn.append(item_inn2)
+                logger.info(f"Found INN in sentence. Index is {index}. Data is {sentence}", pid=os.getpid())
+        logger.info(f"The attempt to find the INN in sentence is completed. Index is {index}. Data is {sentence}",
+                    pid=os.getpid())
         self.get_company_name_from_internet(list_inn, cache_inn, sentence, data, index, fts)
 
     def get_company_name_from_internet(self, list_inn: list, cache_inn: LegalEntitiesParser, sentence: str, data: dict,
@@ -166,13 +172,14 @@ class ReferenceInn(object):
             else:
                 self.get_all_data(fts, cache_inn, data, None, sentence, index, num_inn_in_fts, list_inn_in_fts,
                                   translated, inn_count=0, sum_count_inn=0)
-        self.write_existing_inn_from_fts(index, list_inn_in_fts, num_inn_in_fts)
+        self.write_existing_inn_from_fts(index, data, list_inn_in_fts, num_inn_in_fts)
 
-    def write_existing_inn_from_fts(self, index: int, list_inn_in_fts: list, num_inn_in_fts: dict) -> None:
+    def write_existing_inn_from_fts(self, index: int, data: dict, list_inn_in_fts: list, num_inn_in_fts: dict) -> None:
         """
         Write data inn in files.
         """
         list_is_found_fts: List[bool] = []
+        logger.info(f"Check company_name in FTS. Index is {index}. Data is {data}", pid=os.getpid())
         for dict_inn in list_inn_in_fts:
             dict_inn["count_inn_in_fts"] = num_inn_in_fts["num_inn_in_fts"]
             if dict_inn["is_fts_found"]:
@@ -181,7 +188,7 @@ class ReferenceInn(object):
                 break
             else:
                 list_is_found_fts.append(False)
-        if not all(list_is_found_fts):
+        if not list_inn_in_fts or not all(list_is_found_fts):
             max_dict_inn: dict = max(list_inn_in_fts, key=lambda x: x["company_inn_count"])
             self.write_to_json(index, max_dict_inn)
 
@@ -222,7 +229,7 @@ class ReferenceInn(object):
             self.to_csv(output_file_path, data, 'a')
         else:
             self.to_csv(output_file_path, data, 'w')
-        logger.info(f"Data was written successfully to the file. Index is {index}. Data is {data}", pid=os.getpid())
+        logger.info(f"Data was written successfully to the file. Index is {index}", pid=os.getpid())
 
     def write_to_json(self, index: int, data: dict) -> None:
         """
@@ -232,7 +239,7 @@ class ReferenceInn(object):
         output_file_path: str = os.path.join(self.directory, f'{basename}_{index}.json')
         with open(f"{output_file_path}", 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
-            logger.info(f"Data was written successfully to the file. Index is {index}. Data is {data}", pid=os.getpid())
+            logger.info(f"Data was written successfully to the file. Index is {index}", pid=os.getpid())
 
     def add_index_in_queue(self, is_queue: bool, sentence: str, index: int) -> None:
         """
@@ -281,7 +288,7 @@ class ReferenceInn(object):
                                 f'(most likely a foreign company). Exception - {ex}')
             self.write_to_csv(index, data)
             self.write_to_json(index, data)
-        except (exceptions.TooManyRequests, AssertionError) as ex_interrupt:
+        except (AssertionError,) as ex_interrupt:
             self.stop_parse_data(index, ex_interrupt)
         except Exception as ex_full:
             logger.error(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}', pid=os.getpid())
@@ -310,18 +317,15 @@ class ReferenceInn(object):
         return dataframe.to_dict('records')
 
     @staticmethod
-    def is_enough_money_to_search_engine(not_parsed_data_: List[dict]):
+    def is_enough_money_to_search_engine():
         """
         Check whether there is enough money in the wallet to process the current file.
         """
         try:
             response_balance: Response = requests.get(f"https://xmlriver.com/api/get_balance/yandex/"
                                                       f"?user={USER_XML_RIVER}&key={KEY_XML_RIVER}")
-            response_cost: Response = requests.get(f"https://xmlriver.com/api/get_cost/yandex/"
-                                                   f"?user={USER_XML_RIVER}&key={KEY_XML_RIVER}")
             response_balance.raise_for_status()
-            response_cost.raise_for_status()
-            if float(response_balance.text) < len(not_parsed_data_) * (float(response_cost.text) / 1000):
+            if float(response_balance.text) < 100.0:
                 logger.error("There is not enough money to process all the lines. Please top up your account")
                 logger_stream.error("не_хватает_денег_для_обработки_файла")
                 sys.exit(1)
@@ -342,7 +346,7 @@ if __name__ == "__main__":
     error_flag = Value('i', 0)
     retry_queue: Queue = Queue()
     start_time: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    reference_inn.is_enough_money_to_search_engine(not_parsed_data)
+    reference_inn.is_enough_money_to_search_engine()
 
     with Pool(processes=WORKER_COUNT) as pool:
         for i, dict_data in enumerate(not_parsed_data, 2):
