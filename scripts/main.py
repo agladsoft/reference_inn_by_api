@@ -329,7 +329,7 @@ class ReferenceInn(object):
     def start_multiprocessing_with_queue(self, retry_queue: Queue, not_parsed_data: List[dict],
                                          fts_results: QueryResult, start_time: str) -> None:
         """
-
+        Starting queue processing using a multithreading.
         """
         if not retry_queue.empty():
             time.sleep(120)
@@ -352,7 +352,7 @@ class ReferenceInn(object):
     def start_multiprocessing(self, retry_queue: Queue, not_parsed_data: List[dict], fts_results: QueryResult,
                               start_time: str) -> None:
         """
-
+        Starting processing using a multithreading.
         """
         threads: List[Thread] = []
         for i, dict_data in enumerate(not_parsed_data, 2):
@@ -368,7 +368,7 @@ class ReferenceInn(object):
 
     def main(self):
         """
-
+        The main method that runs the code.
         """
         logger.info("The script has started its work")
         logger.info(f'File is {os.path.basename(self.filename)}')
