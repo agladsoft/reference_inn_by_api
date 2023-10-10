@@ -17,10 +17,10 @@ from pandas import DataFrame
 from requests import Response
 from sqlite3 import Connection
 from clickhouse_connect import get_client
-from threading import Thread, current_thread
 from pandas.io.parsers import TextFileReader
 from clickhouse_connect.driver import Client
 from typing import List, Tuple, Union, Dict, Optional
+from threading import Thread, current_thread, Semaphore
 from clickhouse_connect.driver.query import QueryResult
 from deep_translator import GoogleTranslator, exceptions
 from inn_api import LegalEntitiesParser, SearchEngineParser
@@ -266,25 +266,26 @@ class ReferenceInn(object):
         data['original_file_parsed_on'] = start_time_script
 
     def parse_data(self, not_parsed_data: List[dict], index: int, data: dict, fts: QueryResult, start_time_script,
-                   retry_queue: Queue, is_queue: bool = False) -> None:
+                   retry_queue: Queue, semaphore: Semaphore, is_queue: bool = False) -> None:
         """
         Processing each row.
         """
-        self.add_new_columns(data, start_time_script)
-        sentence: str = data.get("company_name")
-        try:
-            self.get_inn_from_row(str(sentence), data, index, fts)
-        except (IndexError, ValueError, TypeError, sqlite3.OperationalError) as ex:
-            logger.error(f'Not found inn INN Yandex. Data is {index, sentence} (most likely a foreign company). '
-                         f'Exception - {ex}', pid=current_thread().ident)
-            logger_stream.error(f'Not found INN in Yandex. Data is {index, sentence} '
-                                f'(most likely a foreign company). Exception - {ex}')
-            self.write_to_csv(index, data)
-            self.write_to_json(index, data)
-        except Exception as ex_full:
-            logger.error(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}',
-                         pid=current_thread().ident)
-            self.add_index_in_queue(not_parsed_data, retry_queue, is_queue, sentence, index)
+        with semaphore:
+            self.add_new_columns(data, start_time_script)
+            sentence: str = data.get("company_name")
+            try:
+                self.get_inn_from_row(str(sentence), data, index, fts)
+            except (IndexError, ValueError, TypeError, sqlite3.OperationalError) as ex:
+                logger.error(f'Not found inn INN Yandex. Data is {index, sentence} (most likely a foreign company). '
+                             f'Exception - {ex}', pid=current_thread().ident)
+                logger_stream.error(f'Not found INN in Yandex. Data is {index, sentence} '
+                                    f'(most likely a foreign company). Exception - {ex}')
+                self.write_to_csv(index, data)
+                self.write_to_json(index, data)
+            except Exception as ex_full:
+                logger.error(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}',
+                             pid=current_thread().ident)
+                self.add_index_in_queue(not_parsed_data, retry_queue, is_queue, sentence, index)
 
     @staticmethod
     def create_file_for_cache() -> str:
@@ -327,7 +328,7 @@ class ReferenceInn(object):
             sys.exit(1)
 
     def start_multiprocessing_with_queue(self, retry_queue: Queue, not_parsed_data: List[dict],
-                                         fts_results: QueryResult, start_time: str) -> None:
+                                         fts_results: QueryResult, start_time: str, semaphore: Semaphore) -> None:
         """
         Starting queue processing using a multithreading.
         """
@@ -340,7 +341,7 @@ class ReferenceInn(object):
                 index_queue: int = retry_queue.get()
                 thread: Thread = Thread(target=self.parse_data, args=(not_parsed_data, index_queue,
                                                                       not_parsed_data[index_queue - 2], fts_results,
-                                                                      start_time, retry_queue, True))
+                                                                      start_time, retry_queue, semaphore, True))
                 threads.append(thread)
                 thread.start()
             while any(thread.is_alive() for thread in threads):
@@ -350,14 +351,14 @@ class ReferenceInn(object):
                 thread.join()
 
     def start_multiprocessing(self, retry_queue: Queue, not_parsed_data: List[dict], fts_results: QueryResult,
-                              start_time: str) -> None:
+                              start_time: str, semaphore: Semaphore) -> None:
         """
         Starting processing using a multithreading.
         """
         threads: List[Thread] = []
         for i, dict_data in enumerate(not_parsed_data, 2):
             thread: Thread = Thread(target=self.parse_data, args=(not_parsed_data, i, dict_data, fts_results,
-                                                                  start_time, retry_queue))
+                                                                  start_time, retry_queue, semaphore))
             threads.append(thread)
             thread.start()
         while any(thread.is_alive() for thread in threads):
@@ -380,10 +381,11 @@ class ReferenceInn(object):
         retry_queue: Queue = Queue()
         start_time: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.is_enough_money_to_search_engine()
-        self.start_multiprocessing(retry_queue, not_parsed_data, fts_results, start_time)
+        semaphore: Semaphore = Semaphore(4)
+        self.start_multiprocessing(retry_queue, not_parsed_data, fts_results, start_time, semaphore)
         logger.info(f"All rows have been processed. Is the queue empty? {retry_queue.empty()}",
                     pid=current_thread().ident)
-        self.start_multiprocessing_with_queue(retry_queue, not_parsed_data, fts_results, start_time)
+        self.start_multiprocessing_with_queue(retry_queue, not_parsed_data, fts_results, start_time, semaphore)
         logger.info("Push data to db")
         self.push_data_to_db(start_time)
         logger.info("The script has completed its work")
