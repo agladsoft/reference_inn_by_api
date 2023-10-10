@@ -1,4 +1,3 @@
-import os
 import re
 import sqlite3
 import requests
@@ -6,6 +5,7 @@ import contextlib
 import validate_inn
 from requests import Response
 from typing import Union, Tuple
+from threading import current_thread
 from requests_html import HTMLSession
 import xml.etree.ElementTree as ElemTree
 from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE, \
@@ -68,7 +68,7 @@ class SearchEngineParser(LegalEntitiesParser):
         """
         Recording logs.
         """
-        logger.error(message, pid=os.getpid())
+        logger.error(message, pid=current_thread().ident)
         logger_stream.error(f"{prefix}")
 
     @staticmethod
@@ -121,7 +121,7 @@ class SearchEngineParser(LegalEntitiesParser):
             last_range: int = int(myroot[0][index_page][0][0].attrib['last'])
         except IndexError as index_err:
             logger.warning(f"The request to Yandex has been corrected, so we are shifting the index. Index is {index}. "
-                           f"Exception - {index_err}", pid=os.getpid())
+                           f"Exception - {index_err}", pid=current_thread().ident)
             index_page += + 1
             last_range = int(myroot[0][index_page][0][0].attrib['last'])
         return myroot, index_page, last_range
@@ -131,14 +131,14 @@ class SearchEngineParser(LegalEntitiesParser):
         Looking for the INN in the search engine, and then we parse through the sites.
         """
         session: HTMLSession = HTMLSession()
-        logger.info(f"Before request. Data is {value}", pid=os.getpid())
+        logger.info(f"Before request. Data is {value}", pid=current_thread().ident)
         try:
             r: Response = session.get(f"https://xmlriver.com/search_yandex/xml?user={USER_XML_RIVER}"
                                       f"&key={KEY_XML_RIVER}&query={value} ИНН", timeout=120)
         except Exception as e:
-            logger.error(f"Run time out. Data is {value}", pid=os.getpid())
+            logger.error(f"Run time out. Data is {value}", pid=current_thread().ident)
             raise MyError(f"Run time out. Index is {index}. Exception is {e}. Value - {value}", value, index) from e
-        logger.info(f"After request. Data is {value}", pid=os.getpid())
+        logger.info(f"After request. Data is {value}", pid=current_thread().ident)
         myroot, index_page, last_range = self.parse_xml(r, index, value)
         dict_inn: dict = {}
         count_inn: int = 1
@@ -146,11 +146,11 @@ class SearchEngineParser(LegalEntitiesParser):
             try:
                 self.get_inn_from_html(myroot, index_page, results, dict_inn, count_inn)
             except Exception as ex:
-                logger.warning(
-                    f"Description {value} not found in the Yandex. Index is {index}. Exception - {ex}", pid=os.getpid())
+                logger.warning(f"Description {value} not found in the Yandex. Index is {index}. Exception - {ex}",
+                               pid=current_thread().ident)
                 logger_stream.warning(f"Description {value} not found in the Yandex. Index is {index}. "
                                       f"Exception - {ex}")
-        logger.info(f"Dictionary with INN is {dict_inn}. Data is {value}", pid=os.getpid())
+        logger.info(f"Dictionary with INN is {dict_inn}. Data is {value}", pid=current_thread().ident)
         return dict_inn
 
     def get_company_name_by_inn(self, value: str, index: int) -> dict:

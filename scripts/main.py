@@ -9,6 +9,7 @@ import numpy as np
 import validate_inn
 import pandas as pd
 from __init__ import *
+from queue import Queue
 from pathlib import Path
 from csv import DictWriter
 from fuzzywuzzy import fuzz
@@ -16,7 +17,7 @@ from pandas import DataFrame
 from requests import Response
 from sqlite3 import Connection
 from clickhouse_connect import get_client
-from multiprocessing import Queue, Process
+from threading import Thread, current_thread
 from pandas.io.parsers import TextFileReader
 from clickhouse_connect.driver import Client
 from typing import List, Tuple, Union, Dict, Optional
@@ -106,7 +107,7 @@ class ReferenceInn(object):
         on the website https://www.rusprofile.ru/.
         """
         logger.info(f"The processing and filling of data into the dictionary has begun. Data is {sentence}",
-                    pid=os.getpid())
+                    pid=current_thread().ident)
         data["sum_count_inn"] = sum_count_inn
         self.join_fts(fts, data, inn, inn_count, num_inn_in_fts, translated)
         data['company_name_rus'] = translated
@@ -116,7 +117,7 @@ class ReferenceInn(object):
         data["company_inn"] = inn
         data["company_name_unified"] = company_name
         self.compare_different_fuzz(company_name, translated, data)
-        logger.info(f"Data was written successfully to the dictionary. Data is {sentence}", pid=os.getpid())
+        logger.info(f"Data was written successfully to the dictionary. Data is {sentence}", pid=current_thread().ident)
         self.write_to_csv(index, data)
         list_inn_in_fts.append(data.copy())
 
@@ -128,7 +129,7 @@ class ReferenceInn(object):
         sentence: str = sentence.translate({ord(c): " " for c in r".,!@#$%^&*()[]{};?\|~=_+"})
         sentence = self.replace_quotes(sentence, replaced_str=' ')
         sentence = re.sub(" +", " ", sentence).strip() + sign
-        logger.info(f"Try translate sentence to russian. Data is {sentence}", pid=os.getpid())
+        logger.info(f"Try translate sentence to russian. Data is {sentence}", pid=current_thread().ident)
         translated: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500])
         translated = self.replace_quotes(translated, quotes=['"', '«', '»', sign], replaced_str=' ')
         translated = re.sub(" +", " ", translated).strip()
@@ -140,16 +141,16 @@ class ReferenceInn(object):
         2). inn search in yandex by request -> company search by inn.
         """
         list_inn: list = []
-        logger.info(f"Processing of a row with index {index} begins. Data is {sentence}", pid=os.getpid())
+        logger.info(f"Processing of a row with index {index} begins. Data is {sentence}", pid=current_thread().ident)
         all_list_inn: list = re.findall(r"\d+", sentence)
         cache_inn: LegalEntitiesParser = LegalEntitiesParser()
         for item_inn in all_list_inn:
             with contextlib.suppress(Exception):
                 item_inn2 = validate_inn.validate(item_inn)
                 list_inn.append(item_inn2)
-                logger.info(f"Found INN in sentence. Index is {index}. Data is {sentence}", pid=os.getpid())
+                logger.info(f"Found INN in sentence. Index is {index}. Data is {sentence}", pid=current_thread().ident)
         logger.info(f"The attempt to find the INN in sentence is completed. Index is {index}. Data is {sentence}",
-                    pid=os.getpid())
+                    pid=current_thread().ident)
         self.get_company_name_from_internet(list_inn, cache_inn, sentence, data, index, fts)
 
     def get_company_name_from_internet(self, list_inn: list, cache_inn: LegalEntitiesParser, sentence: str, data: dict,
@@ -180,7 +181,7 @@ class ReferenceInn(object):
         Write data inn in files.
         """
         list_is_found_fts: List[bool] = []
-        logger.info(f"Check company_name in FTS. Index is {index}. Data is {data}", pid=os.getpid())
+        logger.info(f"Check company_name in FTS. Index is {index}. Data is {data}", pid=current_thread().ident)
         for dict_inn in list_inn_in_fts:
             dict_inn["count_inn_in_fts"] = num_inn_in_fts["num_inn_in_fts"]
             if dict_inn["is_fts_found"]:
@@ -230,7 +231,7 @@ class ReferenceInn(object):
             self.to_csv(output_file_path, data, 'a')
         else:
             self.to_csv(output_file_path, data, 'w')
-        logger.info(f"Data was written successfully to the file. Index is {index}", pid=os.getpid())
+        logger.info(f"Data was written successfully to the file. Index is {index}", pid=current_thread().ident)
 
     def write_to_json(self, index: int, data: dict) -> None:
         """
@@ -240,7 +241,7 @@ class ReferenceInn(object):
         output_file_path: str = os.path.join(self.directory, f'{basename}_{index}.json')
         with open(f"{output_file_path}", 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
-            logger.info(f"Data was written successfully to the file. Index is {index}", pid=os.getpid())
+            logger.info(f"Data was written successfully to the file. Index is {index}", pid=current_thread().ident)
 
     def add_index_in_queue(self, not_parsed_data: List[dict], retry_queue: Queue, is_queue: bool, sentence: str,
                            index: int) -> None:
@@ -249,7 +250,7 @@ class ReferenceInn(object):
         """
         if not is_queue:
             logger.error(f"An error occurred in which the processor was added to the queue. Index is {index}. "
-                         f"Data is {sentence}", pid=os.getpid())
+                         f"Data is {sentence}", pid=current_thread().ident)
             retry_queue.put(index)
         else:
             data_queue: dict = not_parsed_data[index - 2]
@@ -275,13 +276,14 @@ class ReferenceInn(object):
             self.get_inn_from_row(str(sentence), data, index, fts)
         except (IndexError, ValueError, TypeError, sqlite3.OperationalError) as ex:
             logger.error(f'Not found inn INN Yandex. Data is {index, sentence} (most likely a foreign company). '
-                         f'Exception - {ex}', pid=os.getpid())
+                         f'Exception - {ex}', pid=current_thread().ident)
             logger_stream.error(f'Not found INN in Yandex. Data is {index, sentence} '
                                 f'(most likely a foreign company). Exception - {ex}')
             self.write_to_csv(index, data)
             self.write_to_json(index, data)
         except Exception as ex_full:
-            logger.error(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}', pid=os.getpid())
+            logger.error(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}',
+                         pid=current_thread().ident)
             self.add_index_in_queue(not_parsed_data, retry_queue, is_queue, sentence, index)
 
     @staticmethod
@@ -332,37 +334,37 @@ class ReferenceInn(object):
         if not retry_queue.empty():
             time.sleep(120)
             logger.info(f"Processing of processes that are in the queue. Size queue is {retry_queue.qsize()}",
-                        pid=os.getpid())
-            processes: List[Process] = []
+                        pid=current_thread().ident)
+            threads: List[Thread] = []
             for _ in range(retry_queue.qsize()):
                 index_queue: int = retry_queue.get()
-                process = Process(target=self.parse_data, args=(not_parsed_data, index_queue,
-                                                                not_parsed_data[index_queue - 2], fts_results,
-                                                                start_time, retry_queue, True))
-                processes.append(process)
-                process.start()
-            while any(process.is_alive() for process in processes):
+                thread: Thread = Thread(target=self.parse_data, args=(not_parsed_data, index_queue,
+                                                                      not_parsed_data[index_queue - 2], fts_results,
+                                                                      start_time, retry_queue, True))
+                threads.append(thread)
+                thread.start()
+            while any(thread.is_alive() for thread in threads):
                 # Здесь можно выполнять другие действия, пока процессы выполняются
                 pass
-            for process in processes:
-                process.join()
+            for thread in threads:
+                thread.join()
 
     def start_multiprocessing(self, retry_queue: Queue, not_parsed_data: List[dict], fts_results: QueryResult,
                               start_time: str) -> None:
         """
 
         """
-        processes: List[Process] = []
+        threads: List[Thread] = []
         for i, dict_data in enumerate(not_parsed_data, 2):
-            process: Process = Process(target=self.parse_data, args=(not_parsed_data, i, dict_data, fts_results,
-                                                                     start_time, retry_queue))
-            processes.append(process)
-            process.start()
-        while any(process.is_alive() for process in processes):
+            thread: Thread = Thread(target=self.parse_data, args=(not_parsed_data, i, dict_data, fts_results,
+                                                                  start_time, retry_queue))
+            threads.append(thread)
+            thread.start()
+        while any(thread.is_alive() for thread in threads):
             # Здесь можно выполнять другие действия, пока процессы выполняются
             pass
-        for process in processes:
-            process.join()
+        for thread in threads:
+            thread.join()
 
     def main(self):
         """
@@ -372,14 +374,15 @@ class ReferenceInn(object):
         logger.info(f'File is {os.path.basename(self.filename)}')
         self.create_file_for_cache()
         path: str = self.create_file_for_cache()
-        self.conn: Connection = sqlite3.connect(path)
+        self.conn: Connection = sqlite3.connect(path, check_same_thread=False)
         not_parsed_data: List[dict] = self.convert_csv_to_dict()
         client_clickhouse, fts_results = self.connect_to_db()
         retry_queue: Queue = Queue()
         start_time: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.is_enough_money_to_search_engine()
         self.start_multiprocessing(retry_queue, not_parsed_data, fts_results, start_time)
-        logger.info(f"All rows have been processed. Is the queue empty? {retry_queue.empty()}", pid=os.getpid())
+        logger.info(f"All rows have been processed. Is the queue empty? {retry_queue.empty()}",
+                    pid=current_thread().ident)
         self.start_multiprocessing_with_queue(retry_queue, not_parsed_data, fts_results, start_time)
         logger.info("Push data to db")
         self.push_data_to_db(start_time)
