@@ -16,10 +16,10 @@ from pandas import DataFrame
 from requests import Response
 from sqlite3 import Connection
 from clickhouse_connect import get_client
-from typing import List, Tuple, Union, Dict
-from clickhouse_connect.driver import Client
+from multiprocessing import Queue, Process
 from pandas.io.parsers import TextFileReader
-from multiprocessing import Queue, Value, Process
+from clickhouse_connect.driver import Client
+from typing import List, Tuple, Union, Dict, Optional
 from clickhouse_connect.driver.query import QueryResult
 from deep_translator import GoogleTranslator, exceptions
 from inn_api import LegalEntitiesParser, SearchEngineParser
@@ -27,6 +27,7 @@ from inn_api import LegalEntitiesParser, SearchEngineParser
 
 class ReferenceInn(object):
     def __init__(self, filename, directory):
+        self.conn: Optional[Connection] = None
         self.filename: str = filename
         self.directory = directory
 
@@ -163,7 +164,7 @@ class ReferenceInn(object):
             self.get_all_data(fts, cache_inn, data, list_inn[0], sentence, index, num_inn_in_fts, list_inn_in_fts,
                               translated)
         else:
-            cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", conn)
+            cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", self.conn)
             if api_inn := cache_name_inn.get_company_name_by_inn(translated, index):
                 sum_count_inn: int = sum(api_inn.values())
                 for inn, inn_count in api_inn.items():
@@ -241,7 +242,8 @@ class ReferenceInn(object):
             json.dump(data, f, ensure_ascii=False, indent=4)
             logger.info(f"Data was written successfully to the file. Index is {index}", pid=os.getpid())
 
-    def add_index_in_queue(self, is_queue: bool, sentence: str, index: int) -> None:
+    def add_index_in_queue(self, not_parsed_data: List[dict], retry_queue: Queue, is_queue: bool, sentence: str,
+                           index: int) -> None:
         """
         Adding an index to the queue or writing empty data.
         """
@@ -262,7 +264,8 @@ class ReferenceInn(object):
         data['original_file_name'] = os.path.basename(self.filename)
         data['original_file_parsed_on'] = start_time_script
 
-    def parse_data(self, index: int, data: dict, fts: QueryResult, start_time_script, is_queue: bool = False) -> None:
+    def parse_data(self, not_parsed_data: List[dict], index: int, data: dict, fts: QueryResult, start_time_script,
+                   retry_queue: Queue, is_queue: bool = False) -> None:
         """
         Processing each row.
         """
@@ -279,7 +282,7 @@ class ReferenceInn(object):
             self.write_to_json(index, data)
         except Exception as ex_full:
             logger.error(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}', pid=os.getpid())
-            self.add_index_in_queue(is_queue, sentence, index)
+            self.add_index_in_queue(not_parsed_data, retry_queue, is_queue, sentence, index)
 
     @staticmethod
     def create_file_for_cache() -> str:
@@ -321,41 +324,38 @@ class ReferenceInn(object):
             logger_stream.error("ошибка_при_получении_баланса_яндекса")
             sys.exit(1)
 
+    def start_multiprocessing_with_queue(self, retry_queue: Queue, not_parsed_data: List[dict],
+                                         fts_results: QueryResult, start_time: str) -> None:
+        """
 
-if __name__ == "__main__":
-    logger.info("The script has started its work")
-    logger.info(f'File is {os.path.basename(sys.argv[1])}')
-    reference_inn: ReferenceInn = ReferenceInn(os.path.abspath(sys.argv[1]), sys.argv[2])
-    path: str = reference_inn.create_file_for_cache()
-    conn: Connection = sqlite3.connect(path)
-    not_parsed_data: List[dict] = reference_inn.convert_csv_to_dict()
-    client_clickhouse, fts_results = reference_inn.connect_to_db()
-    error_flag = Value('i', 0)
-    retry_queue: Queue = Queue()
-    start_time: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    reference_inn.is_enough_money_to_search_engine()
-    processes: List[Process] = []
-    for i, dict_data in enumerate(not_parsed_data, 2):
-        process: Process = Process(target=reference_inn.parse_data, args=(i, dict_data, fts_results, start_time))
-        processes.append(process)
-        process.start()
-    while any(process.is_alive() for process in processes):
-        # Здесь можно выполнять другие действия, пока процессы выполняются
-        pass
-    for process in processes:
-        process.join()
+        """
+        if not retry_queue.empty():
+            time.sleep(120)
+            logger.info(f"Processing of processes that are in the queue. Size queue is {retry_queue.qsize()}",
+                        pid=os.getpid())
+            processes: List[Process] = []
+            for _ in range(retry_queue.qsize()):
+                index_queue: int = retry_queue.get()
+                process = Process(target=self.parse_data, args=(not_parsed_data, index_queue,
+                                                                not_parsed_data[index_queue - 2], fts_results,
+                                                                start_time, retry_queue, True))
+                processes.append(process)
+                process.start()
+            while any(process.is_alive() for process in processes):
+                # Здесь можно выполнять другие действия, пока процессы выполняются
+                pass
+            for process in processes:
+                process.join()
 
-    logger.info(f"All rows have been processed. Is the queue empty? {retry_queue.empty()}", pid=os.getpid())
+    def start_multiprocessing(self, retry_queue: Queue, not_parsed_data: List[dict], fts_results: QueryResult,
+                              start_time: str) -> None:
+        """
 
-    if not retry_queue.empty():
-        time.sleep(120)
-        logger.info(f"Processing of processes that are in the queue. Size queue is {retry_queue.qsize()}",
-                    pid=os.getpid())
-        processes = []
-        for _ in range(retry_queue.qsize()):
-            index_queue = retry_queue.get()
-            process = Process(target=reference_inn.parse_data, args=(index_queue, not_parsed_data[index_queue - 2],
-                                                                     fts_results, start_time, True))
+        """
+        processes: List[Process] = []
+        for i, dict_data in enumerate(not_parsed_data, 2):
+            process: Process = Process(target=self.parse_data, args=(not_parsed_data, i, dict_data, fts_results,
+                                                                     start_time, retry_queue))
             processes.append(process)
             process.start()
         while any(process.is_alive() for process in processes):
@@ -363,6 +363,75 @@ if __name__ == "__main__":
             pass
         for process in processes:
             process.join()
-    logger.info("Push data to db")
-    reference_inn.push_data_to_db(start_time)
-    logger.info("The script has completed its work")
+
+    def main(self):
+        """
+
+        """
+        logger.info("The script has started its work")
+        logger.info(f'File is {os.path.basename(self.filename)}')
+        self.create_file_for_cache()
+        path: str = self.create_file_for_cache()
+        self.conn: Connection = sqlite3.connect(path)
+        not_parsed_data: List[dict] = self.convert_csv_to_dict()
+        client_clickhouse, fts_results = self.connect_to_db()
+        retry_queue: Queue = Queue()
+        start_time: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.is_enough_money_to_search_engine()
+        self.start_multiprocessing(retry_queue, not_parsed_data, fts_results, start_time)
+        logger.info(f"All rows have been processed. Is the queue empty? {retry_queue.empty()}", pid=os.getpid())
+        self.start_multiprocessing_with_queue(retry_queue, not_parsed_data, fts_results, start_time)
+        logger.info("Push data to db")
+        self.push_data_to_db(start_time)
+        logger.info("The script has completed its work")
+
+
+if __name__ == "__main__":
+    reference_inn: ReferenceInn = ReferenceInn(os.path.abspath(sys.argv[1]), sys.argv[2])
+    reference_inn.main()
+
+
+# if __name__ == "__main__":
+#     logger.info("The script has started its work")
+#     logger.info(f'File is {os.path.basename(sys.argv[1])}')
+#     reference_inn: ReferenceInn = ReferenceInn(os.path.abspath(sys.argv[1]), sys.argv[2])
+#     path: str = reference_inn.create_file_for_cache()
+#     conn: Connection = sqlite3.connect(path)
+#     not_parsed_data: List[dict] = reference_inn.convert_csv_to_dict()
+#     client_clickhouse, fts_results = reference_inn.connect_to_db()
+#     error_flag = Value('i', 0)
+#     retry_queue: Queue = Queue()
+#     start_time: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+#     reference_inn.is_enough_money_to_search_engine()
+#     processes: List[Process] = []
+#     for i, dict_data in enumerate(not_parsed_data, 2):
+#         process: Process = Process(target=reference_inn.parse_data, args=(i, dict_data, fts_results, start_time))
+#         processes.append(process)
+#         process.start()
+#     while any(process.is_alive() for process in processes):
+#         # Здесь можно выполнять другие действия, пока процессы выполняются
+#         pass
+#     for process in processes:
+#         process.join()
+#
+#     logger.info(f"All rows have been processed. Is the queue empty? {retry_queue.empty()}", pid=os.getpid())
+#
+#     if not retry_queue.empty():
+#         time.sleep(120)
+#         logger.info(f"Processing of processes that are in the queue. Size queue is {retry_queue.qsize()}",
+#                     pid=os.getpid())
+#         processes = []
+#         for _ in range(retry_queue.qsize()):
+#             index_queue = retry_queue.get()
+#             process = Process(target=reference_inn.parse_data, args=(index_queue, not_parsed_data[index_queue - 2],
+#                                                                      fts_results, start_time, True))
+#             processes.append(process)
+#             process.start()
+#         while any(process.is_alive() for process in processes):
+#             # Здесь можно выполнять другие действия, пока процессы выполняются
+#             pass
+#         for process in processes:
+#             process.join()
+#     logger.info("Push data to db")
+#     reference_inn.push_data_to_db(start_time)
+#     logger.info("The script has completed its work")
