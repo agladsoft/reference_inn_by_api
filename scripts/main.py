@@ -19,7 +19,7 @@ from clickhouse_connect import get_client
 from typing import List, Tuple, Union, Dict
 from clickhouse_connect.driver import Client
 from pandas.io.parsers import TextFileReader
-from multiprocessing import Pool, Queue, Value
+from multiprocessing import Queue, Value, Process
 from clickhouse_connect.driver.query import QueryResult
 from deep_translator import GoogleTranslator, exceptions
 from inn_api import LegalEntitiesParser, SearchEngineParser
@@ -39,7 +39,7 @@ class ReferenceInn(object):
         try:
             client: Client = get_client(host=get_my_env_var('HOST'), database=get_my_env_var('DATABASE'),
                                         username=get_my_env_var('USERNAME_DB'), password=get_my_env_var('PASSWORD'))
-            logger.info("Successfully connect ot db")
+            logger.info("Successfully connect to db")
             fts: QueryResult = client.query("SELECT DISTINCT recipients_tin, name_of_the_contract_holder FROM fts")
             # Чтобы проверить, есть ли данные. Так как переменная образуется, но внутри нее могут быть ошибки.
             print(fts.result_rows[0])
@@ -256,17 +256,6 @@ class ReferenceInn(object):
             self.write_to_csv(index, data_queue)
             self.write_to_json(index, data_queue)
 
-    @staticmethod
-    def stop_parse_data(index: int, ex_interrupt: str) -> None:
-        """
-        Exit from processor.
-        """
-        error_message: str = f'Too many requests to the translator. Exception - {ex_interrupt}'
-        logger.error(error_message, pid=os.getpid())
-        logger_stream.error(f'много_запросов_к_переводчику_на_строке_{index}')
-        error_flag.value = 1
-        pool.terminate()
-
     def add_new_columns(self, data: dict, start_time_script: str):
         data['is_inn_found_auto'] = True
         data["is_company_name_from_cache"] = False
@@ -288,8 +277,6 @@ class ReferenceInn(object):
                                 f'(most likely a foreign company). Exception - {ex}')
             self.write_to_csv(index, data)
             self.write_to_json(index, data)
-        except (AssertionError,) as ex_interrupt:
-            self.stop_parse_data(index, ex_interrupt)
         except Exception as ex_full:
             logger.error(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}', pid=os.getpid())
             self.add_index_in_queue(is_queue, sentence, index)
@@ -347,26 +334,35 @@ if __name__ == "__main__":
     retry_queue: Queue = Queue()
     start_time: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     reference_inn.is_enough_money_to_search_engine()
+    processes: List[Process] = []
+    for i, dict_data in enumerate(not_parsed_data, 2):
+        process: Process = Process(target=reference_inn.parse_data, args=(i, dict_data, fts_results, start_time))
+        processes.append(process)
+        process.start()
+    while any(process.is_alive() for process in processes):
+        # Здесь можно выполнять другие действия, пока процессы выполняются
+        pass
+    for process in processes:
+        process.join()
 
-    with Pool(processes=WORKER_COUNT) as pool:
-        for i, dict_data in enumerate(not_parsed_data, 2):
-            pool.apply_async(reference_inn.parse_data, (i, dict_data, fts_results, start_time))
-        pool.close()
-        pool.join()
     logger.info(f"All rows have been processed. Is the queue empty? {retry_queue.empty()}", pid=os.getpid())
 
     if not retry_queue.empty():
         time.sleep(120)
         logger.info(f"Processing of processes that are in the queue. Size queue is {retry_queue.qsize()}",
                     pid=os.getpid())
-        parsed_data = []
-        with Pool(processes=WORKER_COUNT) as pool:
-            while not retry_queue.empty():
-                index_queue = retry_queue.get()
-                pool.apply_async(reference_inn.parse_data,
-                                 (index_queue, not_parsed_data[index_queue - 2], fts_results, start_time, True))
-            pool.close()
-            pool.join()
+        processes = []
+        for _ in range(retry_queue.qsize()):
+            index_queue = retry_queue.get()
+            process = Process(target=reference_inn.parse_data, args=(index_queue, not_parsed_data[index_queue - 2],
+                                                                     fts_results, start_time, True))
+            processes.append(process)
+            process.start()
+        while any(process.is_alive() for process in processes):
+            # Здесь можно выполнять другие действия, пока процессы выполняются
+            pass
+        for process in processes:
+            process.join()
     logger.info("Push data to db")
     reference_inn.push_data_to_db(start_time)
     logger.info("The script has completed its work")
