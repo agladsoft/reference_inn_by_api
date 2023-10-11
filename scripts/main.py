@@ -16,6 +16,8 @@ from fuzzywuzzy import fuzz
 from pandas import DataFrame
 from requests import Response
 from sqlite3 import Connection
+from notifiers import get_notifier
+from notifiers.core import Provider
 from clickhouse_connect import get_client
 from pandas.io.parsers import TextFileReader
 from clickhouse_connect.driver import Client
@@ -319,6 +321,12 @@ class ReferenceInn(object):
                                                       f"?user={USER_XML_RIVER}&key={KEY_XML_RIVER}")
             response_balance.raise_for_status()
             if float(response_balance.text) < 100.0:
+                telegram: Provider = get_notifier('telegram')
+                telegram.notify(
+                    token='6557326533:AAHy6ls9LhTVTGztix8PUSK7BUSaHVEojXc',
+                    chat_id='-4051876751',
+                    message='Баланс в Яндекс кошельке меньше 100 рублей. Пополните, пожалуйста, счет.'
+                )
                 logger.error("There is not enough money to process all the lines. Please top up your account")
                 logger_stream.error("не_хватает_денег_для_обработки_файла")
                 sys.exit(1)
