@@ -324,7 +324,7 @@ class ReferenceInn(object):
                 telegram: Provider = get_notifier('telegram')
                 telegram.notify(
                     token='6557326533:AAHy6ls9LhTVTGztix8PUSK7BUSaHVEojXc',
-                    chat_id='-4051876751',
+                    chat_id='-906821802',
                     message='Баланс в Яндекс кошельке меньше 100 рублей. Пополните, пожалуйста, счет.'
                 )
                 logger.error("There is not enough money to process all the lines. Please top up your account")
