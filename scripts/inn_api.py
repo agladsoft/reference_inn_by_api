@@ -157,13 +157,13 @@ class SearchEngineParser(LegalEntitiesParser):
         """
         Getting the INN from the cache, if there is one. Otherwise, we search in the search engine.
         """
-        rows: sqlite3.Cursor = self.cur.execute(
-            f"""SELECT * FROM "{self.table_name.replace('"', '""')}" WHERE key=?""", (value,),
-        )
-        list_rows: list = list(rows)
-        if list_rows and list_rows[0][1] != "None":
-            logger.info(f"Data is {list_rows[0][0]}. INN is {list_rows[0][1]}", pid=current_thread().ident)
-            return list_rows[0][1]
+        # rows: sqlite3.Cursor = self.cur.execute(
+        #     f"""SELECT * FROM "{self.table_name.replace('"', '""')}" WHERE key=?""", (value,),
+        # )
+        # list_rows: list = list(rows)
+        # if list_rows and list_rows[0][1] != "None":
+        #     logger.info(f"Data is {list_rows[0][0]}. INN is {list_rows[0][1]}", pid=current_thread().ident)
+        #     return list_rows[0][1]
         api_inn: dict = self.get_inn_from_search_engine(value, index)
         for inn in api_inn.items():
             with contextlib.suppress(Exception):
@@ -172,5 +172,5 @@ class SearchEngineParser(LegalEntitiesParser):
                     data: Tuple[str, str] = (inn[1], value)
                     self.cur.execute(sql_update_query, data)
                     self.conn.commit()
-            self.cache_add_and_save(value, inn[1])
+            self.cache_add_and_save(value, inn[0])
         return api_inn
