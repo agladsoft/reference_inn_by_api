@@ -165,5 +165,5 @@ class SearchEngineParser(LegalEntitiesParser):
                     data: Tuple[str, str] = (inn[1], value)
                     self.cur.execute(sql_update_query, data)
                     self.conn.commit()
-            self.cache_add_and_save(value, inn[1])
+            self.cache_add_and_save(value, inn[0])
         return api_inn
