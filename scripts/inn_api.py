@@ -163,7 +163,7 @@ class SearchEngineParser(LegalEntitiesParser):
         list_rows: list = list(rows)
         if list_rows and list_rows[0][1] != "None":
             logger.info(f"Data is {list_rows[0][0]}. INN is {list_rows[0][1]}", pid=current_thread().ident)
-            return list_rows[0][1]
+            return {list_rows[0][1]: 1}
         api_inn: dict = self.get_inn_from_search_engine(value, index)
         for inn in api_inn.items():
             with contextlib.suppress(Exception):
