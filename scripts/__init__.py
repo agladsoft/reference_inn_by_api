@@ -3,7 +3,8 @@ import logging
 import datetime
 from dotenv import load_dotenv
 
-
+TOKEN_TELEGRAM: str = "6557326533:AAHy6ls9LhTVTGztix8PUSK7BUSaHVEojXc"
+CHAT_ID: str = "-906821802"
 USER_XML_RIVER: str = "6390"
 KEY_XML_RIVER: str = "e3b3ac2908b2a9e729f1671218c85e12cfe643b0"
 

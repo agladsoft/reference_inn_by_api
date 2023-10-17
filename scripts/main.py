@@ -320,13 +320,13 @@ class ReferenceInn(object):
             response_balance: Response = requests.get(f"https://xmlriver.com/api/get_balance/yandex/"
                                                       f"?user={USER_XML_RIVER}&key={KEY_XML_RIVER}")
             response_balance.raise_for_status()
-            if float(response_balance.text) < 100.0:
-                telegram: Provider = get_notifier('telegram')
-                telegram.notify(
-                    token='6557326533:AAHy6ls9LhTVTGztix8PUSK7BUSaHVEojXc',
-                    chat_id='-906821802',
-                    message='Баланс в Яндекс кошельке меньше 100 рублей. Пополните, пожалуйста, счет.'
-                )
+            telegram: Provider = get_notifier('telegram')
+            balance: float = float(response_balance.text)
+            telegram.notify(token=TOKEN_TELEGRAM, chat_id=CHAT_ID,
+                            message=f"Баланс в Яндекс кошельке сейчас составляет {balance} рублей.")
+            if balance < 100.0:
+                telegram.notify(token=TOKEN_TELEGRAM, chat_id=CHAT_ID,
+                                message='Баланс в Яндекс кошельке меньше 100 рублей. Пополните, пожалуйста, счет.')
                 logger.error("There is not enough money to process all the lines. Please top up your account")
                 logger_stream.error("не_хватает_денег_для_обработки_файла")
                 sys.exit(1)
