@@ -4,9 +4,7 @@ import json
 import time
 import sqlite3
 import requests
-import contextlib
 import numpy as np
-import validate_inn
 import pandas as pd
 from __init__ import *
 from queue import Queue
@@ -18,6 +16,7 @@ from requests import Response
 from sqlite3 import Connection
 from notifiers import get_notifier
 from notifiers.core import Provider
+from inn_api import LegalEntitiesParser
 from clickhouse_connect import get_client
 from pandas.io.parsers import TextFileReader
 from clickhouse_connect.driver import Client
@@ -25,7 +24,6 @@ from typing import List, Tuple, Union, Dict, Optional
 from threading import Thread, current_thread, Semaphore
 from clickhouse_connect.driver.query import QueryResult
 from deep_translator import GoogleTranslator, exceptions
-from inn_api import LegalEntitiesParser, SearchEngineParser
 
 
 class ReferenceInn(object):
@@ -144,15 +142,15 @@ class ReferenceInn(object):
         """
         list_inn: list = []
         logger.info(f"Processing of a row with index {index} begins. Data is {sentence}", pid=current_thread().ident)
-        all_list_inn: list = re.findall(r"\d+", sentence)
+        # all_list_inn: list = re.findall(r"\d+", sentence)
         cache_inn: LegalEntitiesParser = LegalEntitiesParser()
-        for item_inn in all_list_inn:
-            with contextlib.suppress(Exception):
-                item_inn2 = validate_inn.validate(item_inn)
-                list_inn.append(item_inn2)
-                logger.info(f"Found INN in sentence. Index is {index}. Data is {sentence}", pid=current_thread().ident)
-        logger.info(f"The attempt to find the INN in sentence is completed. Index is {index}. Data is {sentence}",
-                    pid=current_thread().ident)
+        # for item_inn in all_list_inn:
+        #     with contextlib.suppress(Exception):
+        #         item_inn2 = validate_inn.validate(item_inn)
+        #         list_inn.append(item_inn2)
+        #         logger.info(f"Found INN in sentence. Index is {index}. Data is {sentence}", pid=current_thread().ident)
+        # logger.info(f"The attempt to find the INN in sentence is completed. Index is {index}. Data is {sentence}",
+        #             pid=current_thread().ident)
         self.get_company_name_from_internet(list_inn, cache_inn, sentence, data, index, fts)
 
     def get_company_name_from_internet(self, list_inn: list, cache_inn: LegalEntitiesParser, sentence: str, data: dict,
@@ -160,22 +158,22 @@ class ReferenceInn(object):
         """
         Getting company name from dadata or get inn from Yandex, then get company name from dadata.
         """
-        translated: str = self.get_translated_sentence(sentence)
+        # translated: str = self.get_translated_sentence(sentence)
         list_inn_in_fts: List[dict] = []
         num_inn_in_fts: Dict[str, int] = {"num_inn_in_fts": 0, "company_inn_max_rank": 1}
-        if list_inn:
-            self.get_all_data(fts, cache_inn, data, list_inn[0], sentence, index, num_inn_in_fts, list_inn_in_fts,
-                              translated)
-        else:
-            cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", self.conn)
-            if api_inn := cache_name_inn.get_company_name_by_inn(translated, index):
-                sum_count_inn: int = sum(api_inn.values())
-                for inn, inn_count in api_inn.items():
-                    self.get_all_data(fts, cache_inn, data, inn, sentence, index, num_inn_in_fts, list_inn_in_fts,
-                                      translated, inn_count, sum_count_inn)
-            else:
-                self.get_all_data(fts, cache_inn, data, None, sentence, index, num_inn_in_fts, list_inn_in_fts,
-                                  translated, inn_count=0, sum_count_inn=0)
+        # if list_inn:
+        #     self.get_all_data(fts, cache_inn, data, list_inn[0], sentence, index, num_inn_in_fts, list_inn_in_fts,
+        #                       translated)
+        # else:
+        # cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", self.conn)
+        # if api_inn := cache_name_inn.get_company_name_by_inn(translated, index):
+        #     sum_count_inn: int = sum(api_inn.values())
+        #     for inn, inn_count in api_inn.items():
+        #         self.get_all_data(fts, cache_inn, data, inn, sentence, index, num_inn_in_fts, list_inn_in_fts,
+        #                           translated, inn_count, sum_count_inn)
+        # else:
+        self.get_all_data(fts, cache_inn, data, data["company_inn"], sentence, index, num_inn_in_fts, list_inn_in_fts,
+                          data["company_name_rus"], inn_count=1, sum_count_inn=1)
         self.write_existing_inn_from_fts(index, data, list_inn_in_fts, num_inn_in_fts)
 
     def write_existing_inn_from_fts(self, index: int, data: dict, list_inn_in_fts: list, num_inn_in_fts: dict) -> None:
@@ -306,7 +304,7 @@ class ReferenceInn(object):
         Csv data representation in json.
         """
         dataframe: Union[TextFileReader, DataFrame] = pd.read_csv(self.filename, dtype=str)
-        dataframe['company_name'] = dataframe.iloc[:, 0]
+        # dataframe['company_name'] = dataframe.iloc[:, 0]
         dataframe = dataframe.replace({np.nan: None})
         dataframe['company_name'] = dataframe['company_name'].replace({'_x000D_': ''}, regex=True)
         return dataframe.to_dict('records')
