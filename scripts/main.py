@@ -113,10 +113,9 @@ class ReferenceInn(object):
         data['company_name_rus'] = translated
         data["company_inn_max_rank"] = num_inn_in_fts["company_inn_max_rank"]
         num_inn_in_fts["company_inn_max_rank"] += 1
-        inn, company_name, is_cache = provider.get_company_name_by_inn(inn, index)
+        # inn, company_name, is_cache = provider.get_company_name_by_inn(inn, index)
         data["company_inn"] = inn
-        data["company_name_unified"] = company_name
-        self.compare_different_fuzz(company_name, translated, data)
+        self.compare_different_fuzz(data["company_name_unified"], translated, data)
         logger.info(f"Data was written successfully to the dictionary. Data is {sentence}", pid=current_thread().ident)
         self.write_to_csv(index, data)
         list_inn_in_fts.append(data.copy())
@@ -273,6 +272,7 @@ class ReferenceInn(object):
         with semaphore:
             self.add_new_columns(data, start_time_script)
             sentence: str = data.get("company_name")
+            sentence = '"CJ KAZAKHSTAN" LLP TAUGUL-3, AKHMETOV STR., 1, ALMATY CITY,KAZAKHSTAN TEL: +7-727-293-60-77 H.P.: +7-701-907-4639 BIN CODE:130640010470'
             try:
                 self.get_inn_from_row(str(sentence), data, index, fts)
             except (IndexError, ValueError, TypeError, sqlite3.OperationalError) as ex:
