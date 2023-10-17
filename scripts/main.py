@@ -322,9 +322,10 @@ class ReferenceInn(object):
             response_balance.raise_for_status()
             telegram: Provider = get_notifier('telegram')
             balance: float = float(response_balance.text)
-            telegram.notify(token=TOKEN_TELEGRAM, chat_id=CHAT_ID,
-                            message=f"Баланс в Яндекс кошельке сейчас составляет {balance} рублей.")
-            if balance < 100.0:
+            if 200.0 > balance >= 100.0:
+                telegram.notify(token=TOKEN_TELEGRAM, chat_id=CHAT_ID,
+                                message=f"Баланс в Яндекс кошельке сейчас составляет {balance} рублей.")
+            elif balance < 100.0:
                 telegram.notify(token=TOKEN_TELEGRAM, chat_id=CHAT_ID,
                                 message='Баланс в Яндекс кошельке меньше 100 рублей. Пополните, пожалуйста, счет.')
                 logger.error("There is not enough money to process all the lines. Please top up your account")
@@ -389,7 +390,7 @@ class ReferenceInn(object):
         retry_queue: Queue = Queue()
         start_time: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.is_enough_money_to_search_engine()
-        semaphore: Semaphore = Semaphore(4)
+        semaphore: Semaphore = Semaphore(COUNT_THREADS)
         self.start_multiprocessing(retry_queue, not_parsed_data, fts_results, start_time, semaphore)
         logger.info(f"All rows have been processed. Is the queue empty? {retry_queue.empty()}",
                     pid=current_thread().ident)
