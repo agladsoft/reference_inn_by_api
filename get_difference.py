@@ -5,7 +5,10 @@ file_path_from_db = f'{root_dir}/select company_name, company_inn(1).xlsx'
 file_path_from_marketing = f'{root_dir}/reference_inn_all_production.xlsx'
 
 file_from_db = pd.read_excel(file_path_from_db).sort_values(by=['company_name'], ignore_index=True)
-file_from_marketing = pd.read_excel(file_path_from_marketing).sort_values(by=['company_name'], ignore_index=True)
+file_from_marketing = pd.read_excel(file_path_from_marketing)\
+    .sort_values(by=['company_name'], ignore_index=True)
+file_from_marketing['is_company_name_from_cache'] = file_from_marketing['is_company_name_from_cache'].astype(bool)
+file_from_marketing['is_inn_found_auto'] = file_from_marketing['is_inn_found_auto'].astype(bool)
 
 df_difference = pd.DataFrame()
 
@@ -18,4 +21,4 @@ for index, row in file_from_marketing.iterrows():
         df_difference = df_difference.append(row, ignore_index=True)
         # df_difference = pd.concat([df_difference, row], ignore_index=True)
 
-df_difference.to_excel(f'{root_dir}/difference.xlsx', index=False)
+df_difference.to_excel(f'{root_dir}/reference_inn_all_production_17.xlsx', index=False)
