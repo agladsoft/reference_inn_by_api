@@ -11,11 +11,11 @@ from queue import Queue
 from pathlib import Path
 from csv import DictWriter
 from fuzzywuzzy import fuzz
-from pandas import DataFrame
 from requests import Response
 from sqlite3 import Connection
 from notifiers import get_notifier
 from notifiers.core import Provider
+from pandas import DataFrame, Series
 from inn_api import LegalEntitiesParser
 from clickhouse_connect import get_client
 from pandas.io.parsers import TextFileReader
@@ -304,7 +304,8 @@ class ReferenceInn(object):
         Csv data representation in json.
         """
         dataframe: Union[TextFileReader, DataFrame] = pd.read_csv(self.filename, dtype=str)
-        # dataframe['company_name'] = dataframe.iloc[:, 0]
+        series: Series = dataframe.iloc[:, 0]
+        dataframe = series.to_frame(name="company_name")
         dataframe = dataframe.replace({np.nan: None})
         dataframe['company_name'] = dataframe['company_name'].replace({'_x000D_': ''}, regex=True)
         return dataframe.to_dict('records')
