@@ -303,7 +303,7 @@ class ReferenceInn(object):
         Csv data representation in json.
         """
         dataframe: Union[TextFileReader, DataFrame] = pd.read_csv(self.filename, dtype=str)
-        dataframe["confidence_rate"] = dataframe["confidence_rate"].astype(float).astype(int)
+        # dataframe["confidence_rate"] = dataframe["confidence_rate"].astype(float).astype(int)
         dataframe = dataframe.replace({np.nan: None})
         dataframe['company_name'] = dataframe['company_name'].replace({'_x000D_': ''}, regex=True)
         return dataframe.to_dict('records')
