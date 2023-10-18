@@ -13,11 +13,11 @@ from queue import Queue
 from pathlib import Path
 from csv import DictWriter
 from fuzzywuzzy import fuzz
-from pandas import DataFrame
 from requests import Response
 from sqlite3 import Connection
 from notifiers import get_notifier
 from notifiers.core import Provider
+from pandas import DataFrame, Series
 from clickhouse_connect import get_client
 from pandas.io.parsers import TextFileReader
 from clickhouse_connect.driver import Client
@@ -306,7 +306,8 @@ class ReferenceInn(object):
         Csv data representation in json.
         """
         dataframe: Union[TextFileReader, DataFrame] = pd.read_csv(self.filename, dtype=str)
-        dataframe['company_name'] = dataframe.iloc[:, 0]
+        series: Series = dataframe.iloc[:, 0]
+        dataframe = series.to_frame(name="company_name")
         dataframe = dataframe.replace({np.nan: None})
         dataframe['company_name'] = dataframe['company_name'].replace({'_x000D_': ''}, regex=True)
         return dataframe.to_dict('records')
@@ -390,7 +391,7 @@ class ReferenceInn(object):
         retry_queue: Queue = Queue()
         start_time: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.is_enough_money_to_search_engine()
-        semaphore: Semaphore = Semaphore(4)
+        semaphore: Semaphore = Semaphore(COUNT_THREADS)
         self.start_multiprocessing(retry_queue, not_parsed_data, fts_results, start_time, semaphore)
         logger.info(f"All rows have been processed. Is the queue empty? {retry_queue.empty()}",
                     pid=current_thread().ident)
