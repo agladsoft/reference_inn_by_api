@@ -272,7 +272,6 @@ class ReferenceInn(object):
         with semaphore:
             self.add_new_columns(data, start_time_script)
             sentence: str = data.get("company_name")
-            sentence = '"CJ KAZAKHSTAN" LLP TAUGUL-3, AKHMETOV STR., 1, ALMATY CITY,KAZAKHSTAN TEL: +7-727-293-60-77 H.P.: +7-701-907-4639 BIN CODE:130640010470'
             try:
                 self.get_inn_from_row(str(sentence), data, index, fts)
             except (IndexError, ValueError, TypeError, sqlite3.OperationalError) as ex:
@@ -304,8 +303,6 @@ class ReferenceInn(object):
         Csv data representation in json.
         """
         dataframe: Union[TextFileReader, DataFrame] = pd.read_csv(self.filename, dtype=str)
-        series: Series = dataframe.iloc[:, 0]
-        dataframe = series.to_frame(name="company_name")
         dataframe = dataframe.replace({np.nan: None})
         dataframe['company_name'] = dataframe['company_name'].replace({'_x000D_': ''}, regex=True)
         return dataframe.to_dict('records')
