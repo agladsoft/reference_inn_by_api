@@ -253,16 +253,16 @@ class ReferenceInn(object):
             retry_queue.put(index)
         else:
             data_queue: dict = not_parsed_data[index - 2]
-            data_queue['original_file_name'] = os.path.basename(self.filename)
-            data_queue['original_file_parsed_on'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # data_queue['original_file_name'] = os.path.basename(self.filename)
+            # data_queue['original_file_parsed_on'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.write_to_csv(index, data_queue)
             self.write_to_json(index, data_queue)
 
     def add_new_columns(self, data: dict, start_time_script: str):
         data['is_inn_found_auto'] = True
         data["is_company_name_from_cache"] = False
-        data['original_file_name'] = os.path.basename(self.filename)
-        data['original_file_parsed_on'] = start_time_script
+        # data['original_file_name'] = os.path.basename(self.filename)
+        # data['original_file_parsed_on'] = start_time_script
 
     def parse_data(self, not_parsed_data: List[dict], index: int, data: dict, fts: QueryResult, start_time_script,
                    retry_queue: Queue, semaphore: Semaphore, is_queue: bool = False) -> None:
