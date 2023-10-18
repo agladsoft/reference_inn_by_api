@@ -322,9 +322,10 @@ class ReferenceInn(object):
             response_balance.raise_for_status()
             telegram: Provider = get_notifier('telegram')
             balance: float = float(response_balance.text)
-            telegram.notify(token=TOKEN_TELEGRAM, chat_id=CHAT_ID,
-                            message=f"Баланс в Яндекс кошельке сейчас составляет {balance} рублей.")
-            if balance < 100.0:
+            if 200.0 > balance >= 100.0:
+                telegram.notify(token=TOKEN_TELEGRAM, chat_id=CHAT_ID,
+                                message=f"Баланс в Яндекс кошельке сейчас составляет {balance} рублей.")
+            elif balance < 100.0:
                 telegram.notify(token=TOKEN_TELEGRAM, chat_id=CHAT_ID,
                                 message='Баланс в Яндекс кошельке меньше 100 рублей. Пополните, пожалуйста, счет.')
                 logger.error("There is not enough money to process all the lines. Please top up your account")
