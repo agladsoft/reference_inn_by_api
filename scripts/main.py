@@ -60,7 +60,7 @@ class ReferenceInn(object):
         basename: str = os.path.basename(self.filename)
         output_file_path: str = os.path.join(f"{os.path.dirname(self.directory)}/csv",
                                              f'{start_time_script}_{basename}')
-        df: DataFrame = pd.read_csv(output_file_path, dtype={"company_inn": str, "confidence_rate": "Int64"})
+        df: DataFrame = pd.read_csv(output_file_path, dtype={"company_inn": str})
         df = df.replace({np.nan: None, "NaT": None})
         client.insert_df("reference_inn_all", df, database="default")
 
