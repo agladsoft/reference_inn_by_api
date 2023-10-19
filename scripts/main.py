@@ -88,14 +88,14 @@ class ReferenceInn(object):
         """
         Comparing the maximum value of the two confidence_rate.
         """
-        company_name: str = re.sub(" +", " ", company_name)
-        company_name = self.replace_forms_organizations(company_name)
-        fuzz_company_name: int = fuzz.partial_ratio(company_name.upper(), translated.upper())
-        try:
-            company_name_en: str = GoogleTranslator(source='ru', target='en').translate(company_name[:4500])
-        except exceptions.NotValidPayload:
-            company_name_en = company_name
-        data["company_name_unified_en"] = company_name_en
+        # company_name: str = re.sub(" +", " ", company_name)
+        # company_name = self.replace_forms_organizations(company_name)
+        # fuzz_company_name: int = fuzz.partial_ratio(company_name.upper(), translated.upper())
+        # try:
+        #     company_name_en: str = GoogleTranslator(source='ru', target='en').translate(company_name[:4500])
+        # except exceptions.NotValidPayload:
+        #     company_name_en = company_name
+        # data["company_name_unified_en"] = company_name_en
         # fuzz_company_name_two: int = fuzz.partial_ratio(company_name_en.upper(), translated.upper())
         data['confidence_rate'] = data["confidence_rate"]
 
