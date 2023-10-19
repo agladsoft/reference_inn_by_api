@@ -61,6 +61,7 @@ class ReferenceInn(object):
         output_file_path: str = os.path.join(f"{os.path.dirname(self.directory)}/csv",
                                              f'{start_time_script}_{basename}')
         df: DataFrame = pd.read_csv(output_file_path, dtype={"company_inn": str})
+        df = df.drop("original_file_parsed_on_test", axis=1)
         df = df.replace({np.nan: None, "NaT": None})
         client.insert_df("reference_inn_all", df, database="default")
 
@@ -225,7 +226,7 @@ class ReferenceInn(object):
         """
         basename: str = os.path.basename(self.filename)
         output_file_path: str = os.path.join(f"{os.path.dirname(self.directory)}/csv",
-                                             f'{data["original_file_parsed_on"]}_{basename}')
+                                             f'{data["original_file_parsed_on_test"]}_{basename}')
         if os.path.exists(output_file_path):
             self.to_csv(output_file_path, data, 'a')
         else:
@@ -261,6 +262,7 @@ class ReferenceInn(object):
     def add_new_columns(self, data: dict, start_time_script: str):
         data['is_inn_found_auto'] = True
         data["is_company_name_from_cache"] = False
+        data["original_file_parsed_on_test"] = start_time_script
         # data['original_file_name'] = os.path.basename(self.filename)
         # data['original_file_parsed_on'] = start_time_script
 
