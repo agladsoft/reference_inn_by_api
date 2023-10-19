@@ -96,8 +96,8 @@ class ReferenceInn(object):
         except exceptions.NotValidPayload:
             company_name_en = company_name
         data["company_name_unified_en"] = company_name_en
-        fuzz_company_name_two: int = fuzz.partial_ratio(company_name_en.upper(), translated.upper())
-        data['confidence_rate'] = max(fuzz_company_name, fuzz_company_name_two)
+        # fuzz_company_name_two: int = fuzz.partial_ratio(company_name_en.upper(), translated.upper())
+        data['confidence_rate'] = data["confidence_rate"]
 
     def get_all_data(self, fts: QueryResult, provider: LegalEntitiesParser, data: dict, inn: Union[str, None],
                      sentence: str, index: int, num_inn_in_fts: dict, list_inn_in_fts: list, translated: str = None,
