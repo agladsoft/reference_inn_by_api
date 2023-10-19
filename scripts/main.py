@@ -116,7 +116,7 @@ class ReferenceInn(object):
         # inn, company_name, is_cache = provider.get_company_name_by_inn(inn, index)
         data["company_inn"] = inn
         self.compare_different_fuzz(data["company_name_unified"], translated, data)
-        logger.info(f"Data was written successfully to the dictionary. Data is {sentence}", pid=current_thread().ident)
+        # logger.info(f"Data was written successfully to the dictionary. Data is {sentence}", pid=current_thread().ident)
         self.write_to_csv(index, data)
         list_inn_in_fts.append(data.copy())
 
@@ -230,7 +230,7 @@ class ReferenceInn(object):
             self.to_csv(output_file_path, data, 'a')
         else:
             self.to_csv(output_file_path, data, 'w')
-        logger.info(f"Data was written successfully to the file. Index is {index}", pid=current_thread().ident)
+        # logger.info(f"Data was written successfully to the file. Index is {index}", pid=current_thread().ident)
 
     def write_to_json(self, index: int, data: dict) -> None:
         """
@@ -240,7 +240,7 @@ class ReferenceInn(object):
         output_file_path: str = os.path.join(self.directory, f'{basename}_{index}.json')
         with open(f"{output_file_path}", 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
-            logger.info(f"Data was written successfully to the file. Index is {index}", pid=current_thread().ident)
+            # logger.info(f"Data was written successfully to the file. Index is {index}", pid=current_thread().ident)
 
     def add_index_in_queue(self, not_parsed_data: List[dict], retry_queue: Queue, is_queue: bool, sentence: str,
                            index: int) -> None:
@@ -275,10 +275,10 @@ class ReferenceInn(object):
             try:
                 self.get_inn_from_row(str(sentence), data, index, fts)
             except (IndexError, ValueError, TypeError, sqlite3.OperationalError) as ex:
-                logger.error(f'Not found inn INN Yandex. Data is {index, sentence} (most likely a foreign company). '
-                             f'Exception - {ex}', pid=current_thread().ident)
-                logger_stream.error(f'Not found INN in Yandex. Data is {index, sentence} '
-                                    f'(most likely a foreign company). Exception - {ex}')
+                # logger.error(f'Not found inn INN Yandex. Data is {index, sentence} (most likely a foreign company). '
+                #              f'Exception - {ex}', pid=current_thread().ident)
+                # logger_stream.error(f'Not found INN in Yandex. Data is {index, sentence} '
+                #                     f'(most likely a foreign company). Exception - {ex}')
                 self.write_to_csv(index, data)
                 self.write_to_json(index, data)
             except Exception as ex_full:
