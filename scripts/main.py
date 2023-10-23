@@ -22,10 +22,10 @@ from clickhouse_connect import get_client
 from pandas.io.parsers import TextFileReader
 from clickhouse_connect.driver import Client
 from typing import List, Tuple, Union, Dict, Optional
-from threading import Thread, current_thread, Semaphore
 from clickhouse_connect.driver.query import QueryResult
 from deep_translator import GoogleTranslator, exceptions
 from inn_api import LegalEntitiesParser, SearchEngineParser
+from threading import Thread, current_thread, Semaphore, Lock
 
 
 class ReferenceInn(object):
@@ -33,6 +33,7 @@ class ReferenceInn(object):
         self.conn: Optional[Connection] = None
         self.filename: str = filename
         self.directory = directory
+        self.lock: Lock = Lock()
 
     @staticmethod
     def connect_to_db() -> Tuple[Client, QueryResult]:
@@ -214,13 +215,13 @@ class ReferenceInn(object):
                 num_inn_in_fts["num_inn_in_fts"] += 1
                 data["fts_company_name"] = rows[index_name_of_the_contract_holder]
 
-    @staticmethod
-    def to_csv(output_file_path: str, data: dict, operator: str):
-        with open(output_file_path, operator) as csvfile:
-            writer = DictWriter(csvfile, fieldnames=list(data.keys()))
-            if operator == 'w':
-                writer.writeheader()
-            writer.writerow(data)
+    def to_csv(self, output_file_path: str, data: dict, operator: str):
+        with self.lock:
+            with open(output_file_path, operator) as csvfile:
+                writer = DictWriter(csvfile, fieldnames=list(data.keys()))
+                if operator == 'w':
+                    writer.writeheader()
+                writer.writerow(data)
 
     def write_to_csv(self, index: int, data: dict) -> None:
         """
