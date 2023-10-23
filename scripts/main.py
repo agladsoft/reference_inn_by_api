@@ -183,7 +183,8 @@ class ReferenceInn(object):
         Write data inn in files.
         """
         list_is_found_fts: List[bool] = []
-        logger.info(f"Check company_name in FTS. Index is {index}. Data is {data}", pid=current_thread().ident)
+        logger.info(f"Check company_name in FTS. Index is {index}. Data is {data['company_name']}",
+                    pid=current_thread().ident)
         for dict_inn in list_inn_in_fts:
             dict_inn["count_inn_in_fts"] = num_inn_in_fts["num_inn_in_fts"]
             if dict_inn["is_fts_found"]:
