@@ -385,6 +385,12 @@ class ReferenceInn(object):
         """
         The main method that runs the code.
         """
+        logging.basicConfig(
+            filename=f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging/"
+                     f"{datetime.datetime.now().date()}_{os.path.basename(self.filename)}.log",
+            format="[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s",
+            datefmt="%d/%B/%Y %H:%M:%S"
+        )
         logger.info("The script has started its work")
         logger.info(f'File is {os.path.basename(self.filename)}')
         self.create_file_for_cache()
