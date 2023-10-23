@@ -239,7 +239,7 @@ class ReferenceInn(object):
         Writing data to json.
         """
         basename: str = os.path.basename(self.filename)
-        output_file_path: str = os.path.join(self.directory, f'{basename}.csv')
+        output_file_path: str = os.path.join(self.directory, 'test.csv')
 
         if os.path.exists(output_file_path):
             self.to_csv(output_file_path, data, 'a')
