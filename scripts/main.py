@@ -238,9 +238,15 @@ class ReferenceInn(object):
         Writing data to json.
         """
         basename: str = os.path.basename(self.filename)
-        output_file_path: str = os.path.join(self.directory, f'{basename}_{index}.json')
-        with open(f"{output_file_path}", 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
+        output_file_path: str = os.path.join(self.directory, f'{basename}.csv')
+
+        if os.path.exists(output_file_path):
+            self.to_csv(output_file_path, data, 'a')
+        else:
+            self.to_csv(output_file_path, data, 'w')
+
+        # with open(f"{output_file_path}", 'w', encoding='utf-8') as f:
+        #     json.dump(data, f, ensure_ascii=False, indent=4)
             # logger.info(f"Data was written successfully to the file. Index is {index}", pid=current_thread().ident)
 
     def add_index_in_queue(self, not_parsed_data: List[dict], retry_queue: Queue, is_queue: bool, sentence: str,
