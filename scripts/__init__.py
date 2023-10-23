@@ -1,6 +1,5 @@
 import os
 import logging
-import datetime
 from dotenv import load_dotenv
 
 COUNT_THREADS: int = 4
@@ -49,13 +48,6 @@ class CustomAdapter(logging.LoggerAdapter):
 
 if not os.path.exists(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging"):
     os.mkdir(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging")
-
-logging.basicConfig(
-    filename=f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging/"
-             f"logging_{datetime.datetime.now().date()}.log",
-    format="[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s",
-    datefmt="%d/%B/%Y %H:%M:%S"
-)
 
 logger: logging.getLogger = logging.getLogger("file_handler")
 if logger.hasHandlers():
