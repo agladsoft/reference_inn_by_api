@@ -242,12 +242,10 @@ class ReferenceInn(object):
         Writing data to json.
         """
         basename: str = os.path.basename(self.filename)
-        output_file_path: str = os.path.join(self.directory, 'test.csv')
-        parsed_data.append(data)
-
-        # with open(f"{output_file_path}", 'w', encoding='utf-8') as f:
-        #     json.dump(data, f, ensure_ascii=False, indent=4)
-            # logger.info(f"Data was written successfully to the file. Index is {index}", pid=current_thread().ident)
+        output_file_path: str = os.path.join(self.directory, basename)
+        with open(f"{output_file_path}", 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+            logger.info(f"Data was written successfully to the file. Index is {index}", pid=current_thread().ident)
 
     def add_index_in_queue(self, not_parsed_data: List[dict], retry_queue: Queue, is_queue: bool, sentence: str,
                            index: int) -> None:
@@ -292,7 +290,8 @@ class ReferenceInn(object):
             except Exception as ex_full:
                 logger.error(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}',
                              pid=current_thread().ident)
-                self.add_index_in_queue(not_parsed_data, retry_queue, is_queue, sentence, index)
+                self.write_to_json(index, data, parsed_data)
+                # self.add_index_in_queue(not_parsed_data, retry_queue, is_queue, sentence, index)
 
     @staticmethod
     def create_file_for_cache() -> str:
@@ -369,17 +368,19 @@ class ReferenceInn(object):
         """
         Starting processing using a multithreading.
         """
-        threads: List[Thread] = []
+        # threads: List[Thread] = []
         for i, dict_data in enumerate(not_parsed_data, 2):
-            thread: Thread = Thread(target=self.parse_data, args=(not_parsed_data, i, dict_data, fts_results,
-                                                                  start_time, retry_queue, semaphore, parsed_data))
-            threads.append(thread)
-            thread.start()
-        while any(thread.is_alive() for thread in threads):
-            # Здесь можно выполнять другие действия, пока процессы выполняются
-            pass
-        for thread in threads:
-            thread.join()
+            self.parse_data(not_parsed_data, i, dict_data, fts_results,
+                            start_time, retry_queue, semaphore, parsed_data)
+        #     thread: Thread = Thread(target=self.parse_data, args=(not_parsed_data, i, dict_data, fts_results,
+        #                                                           start_time, retry_queue, semaphore, parsed_data))
+        #     threads.append(thread)
+        #     thread.start()
+        # while any(thread.is_alive() for thread in threads):
+        #     # Здесь можно выполнять другие действия, пока процессы выполняются
+        #     pass
+        # for thread in threads:
+        #     thread.join()
 
     def main(self):
         """
@@ -406,9 +407,7 @@ class ReferenceInn(object):
         self.start_multiprocessing(retry_queue, not_parsed_data, fts_results, start_time, semaphore, parsed_data)
         logger.info(f"All rows have been processed. Is the queue empty? {retry_queue.empty()}",
                     pid=current_thread().ident)
-        self.start_multiprocessing_with_queue(retry_queue, not_parsed_data, fts_results, start_time, semaphore)
-        df = pd.DataFrame(parsed_data)
-        df.to_csv("/home/timur/Загрузки/test.csv")
+        # self.start_multiprocessing_with_queue(retry_queue, not_parsed_data, fts_results, start_time, semaphore)
         logger.info("Push data to db")
         # self.push_data_to_db(start_time)
         logger.info("The script has completed its work")
