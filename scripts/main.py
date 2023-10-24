@@ -242,7 +242,7 @@ class ReferenceInn(object):
         Writing data to json.
         """
         basename: str = os.path.basename(self.filename)
-        output_file_path: str = os.path.join(self.directory, basename)
+        output_file_path: str = os.path.join(self.directory, f"{basename}.json")
         with open(f"{output_file_path}", 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
             logger.info(f"Data was written successfully to the file. Index is {index}", pid=current_thread().ident)
