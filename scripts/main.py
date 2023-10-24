@@ -137,7 +137,7 @@ class ReferenceInn(object):
         translated = re.sub(" +", " ", translated).strip()
         return translated
 
-    def get_inn_from_row(self, sentence: str, data: dict, index: int, fts: QueryResult) -> None:
+    def get_inn_from_row(self, sentence: str, data: dict, index: int, fts: QueryResult, parsed_data: list) -> None:
         """
         Full processing of the sentence, including 1). inn search by offer -> company search by inn,
         2). inn search in yandex by request -> company search by inn.
@@ -153,10 +153,10 @@ class ReferenceInn(object):
         #         logger.info(f"Found INN in sentence. Index is {index}. Data is {sentence}", pid=current_thread().ident)
         # logger.info(f"The attempt to find the INN in sentence is completed. Index is {index}. Data is {sentence}",
         #             pid=current_thread().ident)
-        self.get_company_name_from_internet(list_inn, cache_inn, sentence, data, index, fts)
+        self.get_company_name_from_internet(list_inn, cache_inn, sentence, data, index, fts, parsed_data)
 
     def get_company_name_from_internet(self, list_inn: list, cache_inn: LegalEntitiesParser, sentence: str, data: dict,
-                                       index: int, fts: QueryResult) -> None:
+                                       index: int, fts: QueryResult, parsed_data: list) -> None:
         """
         Getting company name from dadata or get inn from Yandex, then get company name from dadata.
         """
@@ -176,9 +176,10 @@ class ReferenceInn(object):
         # else:
         self.get_all_data(fts, cache_inn, data, data["company_inn"], sentence, index, num_inn_in_fts, list_inn_in_fts,
                           data["company_name_rus"], inn_count=1, sum_count_inn=1)
-        self.write_existing_inn_from_fts(index, data, list_inn_in_fts, num_inn_in_fts)
+        self.write_existing_inn_from_fts(index, data, list_inn_in_fts, num_inn_in_fts, parsed_data)
 
-    def write_existing_inn_from_fts(self, index: int, data: dict, list_inn_in_fts: list, num_inn_in_fts: dict) -> None:
+    def write_existing_inn_from_fts(self, index: int, data: dict, list_inn_in_fts: list, num_inn_in_fts: dict,
+                                    parsed_data: list) -> None:
         """
         Write data inn in files.
         """
@@ -188,14 +189,14 @@ class ReferenceInn(object):
         for dict_inn in list_inn_in_fts:
             dict_inn["count_inn_in_fts"] = num_inn_in_fts["num_inn_in_fts"]
             if dict_inn["is_fts_found"]:
-                self.write_to_json(index, dict_inn)
+                self.write_to_json(index, dict_inn, parsed_data)
                 list_is_found_fts.append(True)
                 break
             else:
                 list_is_found_fts.append(False)
         if not list_inn_in_fts or not all(list_is_found_fts):
             max_dict_inn: dict = max(list_inn_in_fts, key=lambda x: x["company_inn_count"])
-            self.write_to_json(index, max_dict_inn)
+            self.write_to_json(index, max_dict_inn, parsed_data)
 
     @staticmethod
     def join_fts(fts: QueryResult, data: dict, inn: Union[str, None], inn_count: int, num_inn_in_fts: Dict[str, int],
@@ -227,26 +228,22 @@ class ReferenceInn(object):
         """
         Writing data to json.
         """
-        basename: str = os.path.basename(self.filename)
-        output_file_path: str = os.path.join(f"{os.path.dirname(self.directory)}/csv",
-                                             f'{data["original_file_parsed_on_test"]}_{basename}')
-        if os.path.exists(output_file_path):
-            self.to_csv(output_file_path, data, 'a')
-        else:
-            self.to_csv(output_file_path, data, 'w')
+        # basename: str = os.path.basename(self.filename)
+        # output_file_path: str = os.path.join(f"{os.path.dirname(self.directory)}/csv",
+        #                                      f'{data["original_file_parsed_on_test"]}_{basename}')
+        # if os.path.exists(output_file_path):
+        #     self.to_csv(output_file_path, data, 'a')
+        # else:
+        #     self.to_csv(output_file_path, data, 'w')
         # logger.info(f"Data was written successfully to the file. Index is {index}", pid=current_thread().ident)
 
-    def write_to_json(self, index: int, data: dict) -> None:
+    def write_to_json(self, index: int, data: dict, parsed_data: list) -> None:
         """
         Writing data to json.
         """
         basename: str = os.path.basename(self.filename)
         output_file_path: str = os.path.join(self.directory, 'test.csv')
-
-        if os.path.exists(output_file_path):
-            self.to_csv(output_file_path, data, 'a')
-        else:
-            self.to_csv(output_file_path, data, 'w')
+        parsed_data.append(data)
 
         # with open(f"{output_file_path}", 'w', encoding='utf-8') as f:
         #     json.dump(data, f, ensure_ascii=False, indent=4)
@@ -276,7 +273,7 @@ class ReferenceInn(object):
         # data['original_file_parsed_on'] = start_time_script
 
     def parse_data(self, not_parsed_data: List[dict], index: int, data: dict, fts: QueryResult, start_time_script,
-                   retry_queue: Queue, semaphore: Semaphore, is_queue: bool = False) -> None:
+                   retry_queue: Queue, semaphore: Semaphore, parsed_data: list, is_queue: bool = False) -> None:
         """
         Processing each row.
         """
@@ -284,14 +281,14 @@ class ReferenceInn(object):
             self.add_new_columns(data, start_time_script)
             sentence: str = data.get("company_name")
             try:
-                self.get_inn_from_row(str(sentence), data, index, fts)
+                self.get_inn_from_row(str(sentence), data, index, fts, parsed_data)
             except (IndexError, ValueError, TypeError, sqlite3.OperationalError) as ex:
                 # logger.error(f'Not found inn INN Yandex. Data is {index, sentence} (most likely a foreign company). '
                 #              f'Exception - {ex}', pid=current_thread().ident)
                 # logger_stream.error(f'Not found INN in Yandex. Data is {index, sentence} '
                 #                     f'(most likely a foreign company). Exception - {ex}')
                 self.write_to_csv(index, data)
-                self.write_to_json(index, data)
+                self.write_to_json(index, data, parsed_data)
             except Exception as ex_full:
                 logger.error(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}',
                              pid=current_thread().ident)
@@ -368,14 +365,14 @@ class ReferenceInn(object):
                 thread.join()
 
     def start_multiprocessing(self, retry_queue: Queue, not_parsed_data: List[dict], fts_results: QueryResult,
-                              start_time: str, semaphore: Semaphore) -> None:
+                              start_time: str, semaphore: Semaphore, parsed_data) -> None:
         """
         Starting processing using a multithreading.
         """
         threads: List[Thread] = []
         for i, dict_data in enumerate(not_parsed_data, 2):
             thread: Thread = Thread(target=self.parse_data, args=(not_parsed_data, i, dict_data, fts_results,
-                                                                  start_time, retry_queue, semaphore))
+                                                                  start_time, retry_queue, semaphore, parsed_data))
             threads.append(thread)
             thread.start()
         while any(thread.is_alive() for thread in threads):
@@ -405,10 +402,13 @@ class ReferenceInn(object):
         start_time: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.is_enough_money_to_search_engine()
         semaphore: Semaphore = Semaphore(COUNT_THREADS)
-        self.start_multiprocessing(retry_queue, not_parsed_data, fts_results, start_time, semaphore)
+        parsed_data: list = []
+        self.start_multiprocessing(retry_queue, not_parsed_data, fts_results, start_time, semaphore, parsed_data)
         logger.info(f"All rows have been processed. Is the queue empty? {retry_queue.empty()}",
                     pid=current_thread().ident)
         self.start_multiprocessing_with_queue(retry_queue, not_parsed_data, fts_results, start_time, semaphore)
+        df = pd.DataFrame(parsed_data)
+        df.to_csv("/home/timur/Загрузки/test.csv")
         logger.info("Push data to db")
         # self.push_data_to_db(start_time)
         logger.info("The script has completed its work")
