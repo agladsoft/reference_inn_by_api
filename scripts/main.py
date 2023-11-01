@@ -388,7 +388,7 @@ class ReferenceInn(object):
                     pid=current_thread().ident)
         self.start_multiprocessing_with_queue(retry_queue, not_parsed_data, fts_results, start_time)
         logger.info("Push data to db")
-        # self.push_data_to_db(start_time)
+        self.push_data_to_db(start_time)
         logger.info("The script has completed its work")
 
 
