@@ -20,10 +20,10 @@ from notifiers import get_notifier
 from notifiers.core import Provider
 from pandas import DataFrame, Series
 from clickhouse_connect import get_client
+from threading import current_thread, Lock
 from pandas.io.parsers import TextFileReader
 from clickhouse_connect.driver import Client
 from concurrent.futures import ThreadPoolExecutor
-from threading import current_thread, Semaphore, Lock
 from typing import List, Tuple, Union, Dict, Optional
 from clickhouse_connect.driver.query import QueryResult
 from deep_translator import GoogleTranslator, exceptions
