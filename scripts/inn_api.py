@@ -30,7 +30,7 @@ class LegalEntitiesParser(object):
         data: dict = {
             "inn": inn
         }
-        response: Response = requests.post(f"http://{get_my_env_var('HOST')}:8003", json=data)
+        response: Response = requests.post(f"http://service_inn:8003", json=data)
         if response.status_code == 200:
             data = response.json()
             return inn, data[0][0]['value'], data[1]
