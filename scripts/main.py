@@ -60,7 +60,7 @@ class ReferenceInn(object):
         """
         Push all data to clickhouse.
         """
-        client: Client = get_client(host="clickhouse", database="default",
+        client: Client = get_client(host=get_my_env_var('HOST'), database="default",
                                     username="default", password=get_my_env_var('PASSWORD'))
         basename: str = os.path.basename(self.filename)
         output_file_path: str = os.path.join(f"{os.path.dirname(self.directory)}/csv",
