@@ -279,11 +279,11 @@ class ReferenceInn(object):
         sentence: str = data.get("company_name")
         try:
             self.get_inn_from_row(str(sentence), data, index, fts)
-        except (IndexError, ValueError, TypeError, sqlite3.OperationalError) as ex:
+        except (IndexError, ValueError, TypeError) as ex:
             logger.error(f'Not found inn INN Yandex. Data is {index, sentence} (most likely a foreign company). '
-                         f'Exception - {ex}', pid=current_thread().ident)
+                         f'Exception - {ex}. Type error - {type(ex)}', pid=current_thread().ident)
             logger_stream.error(f'Not found INN in Yandex. Data is {index, sentence} '
-                                f'(most likely a foreign company). Exception - {ex}')
+                                f'(most likely a foreign company). Exception - {ex}. Type error - {type(ex)}')
             self.write_to_csv(index, data)
             self.write_to_json(index, data)
         except Exception as ex_full:
