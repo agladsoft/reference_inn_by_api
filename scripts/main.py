@@ -89,24 +89,25 @@ class ReferenceInn(object):
             sentence = sentence.replace(quote, replaced_str)
         return sentence
 
-    def compare_different_fuzz(self, company_name: str, translated: str, data: dict) -> None:
+    def compare_different_fuzz(self, company_name: str, translated: Optional[str], data: dict) -> None:
         """
         Comparing the maximum value of the two confidence_rate.
         """
         company_name: str = re.sub(" +", " ", company_name)
         company_name = self.replace_forms_organizations(company_name)
-        fuzz_company_name: int = fuzz.partial_ratio(company_name.upper(), translated.upper())
-        try:
-            company_name_en: str = GoogleTranslator(source='ru', target='en').translate(company_name[:4500])
-        except exceptions.NotValidPayload:
-            company_name_en = company_name
-        data["company_name_unified_en"] = company_name_en
-        fuzz_company_name_two: int = fuzz.partial_ratio(company_name_en.upper(), translated.upper())
-        data['confidence_rate'] = max(fuzz_company_name, fuzz_company_name_two)
+        if translated:
+            fuzz_company_name: int = fuzz.partial_ratio(company_name.upper(), translated.upper())
+            try:
+                company_name_en: str = GoogleTranslator(source='ru', target='en').translate(company_name[:4500])
+            except exceptions.NotValidPayload:
+                company_name_en = company_name
+            data["company_name_unified_en"] = company_name_en
+            fuzz_company_name_two: int = fuzz.partial_ratio(company_name_en.upper(), translated.upper())
+            data['confidence_rate'] = max(fuzz_company_name, fuzz_company_name_two)
 
     def get_all_data(self, fts: QueryResult, provider: LegalEntitiesParser, data: dict, inn: Union[str, None],
-                     sentence: str, index: int, num_inn_in_fts: dict, list_inn_in_fts: list, translated: str = None,
-                     inn_count: int = 1, sum_count_inn: int = 1) -> None:
+                     sentence: str, index: int, num_inn_in_fts: dict, list_inn_in_fts: list, translated:
+                     Optional[str] = None, inn_count: int = 1, sum_count_inn: int = 1) -> None:
         """
         We get a unified company name from the sentence itself for the found INN. And then we are looking for a company
         on the website https://www.rusprofile.ru/.
@@ -126,7 +127,7 @@ class ReferenceInn(object):
         self.write_to_csv(index, data)
         list_inn_in_fts.append(data.copy())
 
-    def get_translated_sentence(self, sentence: str) -> str:
+    def get_translated_sentence(self, sentence: str) -> Optional[str]:
         """
         Getting translated sentence.
         """
@@ -136,8 +137,9 @@ class ReferenceInn(object):
         sentence = re.sub(" +", " ", sentence).strip() + sign
         logger.info(f"Try translate sentence to russian. Data is {sentence}", pid=current_thread().ident)
         translated: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500])
-        translated = self.replace_quotes(translated, quotes=['"', '«', '»', sign], replaced_str=' ')
-        translated = re.sub(" +", " ", translated).strip()
+        if translated:
+            translated = self.replace_quotes(translated, quotes=['"', '«', '»', sign], replaced_str=' ')
+            translated = re.sub(" +", " ", translated).strip()
         return translated
 
     def get_inn_from_row(self, sentence: str, data: dict, index: int, fts: QueryResult) -> None:
@@ -163,7 +165,7 @@ class ReferenceInn(object):
         """
         Getting company name from dadata or get inn from Yandex, then get company name from dadata.
         """
-        translated: str = self.get_translated_sentence(sentence)
+        translated: Optional[str] = self.get_translated_sentence(sentence)
         list_inn_in_fts: List[dict] = []
         num_inn_in_fts: Dict[str, int] = {"num_inn_in_fts": 0, "company_inn_max_rank": 1}
         if list_inn:
