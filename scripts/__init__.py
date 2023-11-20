@@ -1,9 +1,10 @@
 import os
 import logging
-import datetime
+from dotenv import load_dotenv
 
-WORKER_COUNT: int = 4
-
+COUNT_THREADS: int = 4
+TOKEN_TELEGRAM: str = "6557326533:AAHy6ls9LhTVTGztix8PUSK7BUSaHVEojXc"
+CHAT_ID: str = "-4051876751"
 USER_XML_RIVER: str = "6390"
 KEY_XML_RIVER: str = "e3b3ac2908b2a9e729f1671218c85e12cfe643b0"
 
@@ -48,13 +49,6 @@ class CustomAdapter(logging.LoggerAdapter):
 if not os.path.exists(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging"):
     os.mkdir(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging")
 
-logging.basicConfig(
-    filename=f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging/"
-             f"logging_{datetime.datetime.now().date()}.log",
-    format="[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s",
-    datefmt="%d/%B/%Y %H:%M:%S"
-)
-
 logger: logging.getLogger = logging.getLogger("file_handler")
 if logger.hasHandlers():
     logger.handlers.clear()
@@ -68,3 +62,17 @@ if logger_stream.hasHandlers():
     logger_stream.handlers.clear()
 logger_stream.addHandler(console_out)
 logger_stream.setLevel(logging.INFO)
+
+
+load_dotenv()
+
+
+def get_my_env_var(var_name: str) -> str:
+    try:
+        return os.environ[var_name]
+    except KeyError as e:
+        raise MissingEnvironmentVariable(f"{var_name} does not exist") from e
+
+
+class MissingEnvironmentVariable(Exception):
+    pass

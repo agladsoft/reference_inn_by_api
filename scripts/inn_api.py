@@ -1,4 +1,3 @@
-import os
 import re
 import sqlite3
 import requests
@@ -6,6 +5,7 @@ import contextlib
 import validate_inn
 from requests import Response
 from typing import Union, Tuple
+from threading import current_thread
 from requests_html import HTMLSession
 import xml.etree.ElementTree as ElemTree
 from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE
@@ -20,8 +20,8 @@ class MyError(Exception):
 
 class LegalEntitiesParser(object):
 
-    def get_company_name_from_cache(self, inn: str, index: int) -> \
-            Tuple[Union[str, None], Union[list, None], bool]:
+    def get_company_name_by_inn(self, inn: str, index: int) -> \
+            Tuple[Union[str, None], Union[str, None], bool]:
         """
         Getting the company name unified from the cache, if there is one.
         Otherwise, we are looking for verification of legal entities on websites.
@@ -29,7 +29,7 @@ class LegalEntitiesParser(object):
         data: dict = {
             "inn": inn
         }
-        response: Response = requests.post("http://service_inn:8003", json=data)
+        response: Response = requests.post(f"http://service_inn:8003", json=data)
         if response.status_code == 200:
             data = response.json()
             return inn, data[0][0]['value'], data[1]
@@ -67,7 +67,7 @@ class SearchEngineParser(LegalEntitiesParser):
         """
         Recording logs.
         """
-        logger.error(message, pid=os.getpid())
+        logger.error(message, pid=current_thread().ident)
         logger_stream.error(f"{prefix}")
 
     @staticmethod
@@ -120,49 +120,49 @@ class SearchEngineParser(LegalEntitiesParser):
             last_range: int = int(myroot[0][index_page][0][0].attrib['last'])
         except IndexError as index_err:
             logger.warning(f"The request to Yandex has been corrected, so we are shifting the index. Index is {index}. "
-                           f"Exception - {index_err}", pid=os.getpid())
+                           f"Exception - {index_err}", pid=current_thread().ident)
             index_page += + 1
             last_range = int(myroot[0][index_page][0][0].attrib['last'])
         return myroot, index_page, last_range
 
-    def get_inn_from_search_engine(self, value: str, index: int) -> str:
+    def get_inn_from_search_engine(self, value: str, index: int) -> dict:
         """
         Looking for the INN in the search engine, and then we parse through the sites.
         """
         session: HTMLSession = HTMLSession()
-        logger.info(f"Before request. Data is {value}", pid=os.getpid())
+        logger.info(f"Before request. Data is {value}", pid=current_thread().ident)
         try:
             r: Response = session.get(f"https://xmlriver.com/search_yandex/xml?user={USER_XML_RIVER}"
                                       f"&key={KEY_XML_RIVER}&query={value} ИНН", timeout=120)
         except Exception as e:
-            logger.error(f"Run time out. Data is {value}", pid=os.getpid())
+            logger.error(f"Run time out. Data is {value}", pid=current_thread().ident)
             raise MyError(f"Run time out. Index is {index}. Exception is {e}. Value - {value}", value, index) from e
-        logger.info(f"After request. Data is {value}", pid=os.getpid())
+        logger.info(f"After request. Data is {value}", pid=current_thread().ident)
         myroot, index_page, last_range = self.parse_xml(r, index, value)
         dict_inn: dict = {}
-        count_inn: int = 0
+        count_inn: int = 1
         for results in range(1, last_range):
             try:
                 self.get_inn_from_html(myroot, index_page, results, dict_inn, count_inn)
             except Exception as ex:
-                logger.warning(
-                    f"Description {value} not found in the Yandex. Index is {index}. Exception - {ex}", pid=os.getpid())
+                logger.warning(f"Description {value} not found in the Yandex. Index is {index}. Exception - {ex}",
+                               pid=current_thread().ident)
                 logger_stream.warning(f"Description {value} not found in the Yandex. Index is {index}. "
                                       f"Exception - {ex}")
-        logger.info(f"Dictionary with INN is {dict_inn}. Data is {value}", pid=os.getpid())
-        return max(dict_inn, key=dict_inn.get) if dict_inn else "None"
+        logger.info(f"Dictionary with INN is {dict_inn}. Data is {value}", pid=current_thread().ident)
+        return dict_inn
 
-    def get_company_name_from_cache(self, value: str, index: int) -> Tuple[str, str]:
+    def get_company_name_by_inn(self, value: str, index: int) -> dict:
         """
         Getting the INN from the cache, if there is one. Otherwise, we search in the search engine.
         """
-        for key in [value]:
-            api_inn: str = self.get_inn_from_search_engine(key, index)
+        api_inn: dict = self.get_inn_from_search_engine(value, index)
+        for inn in api_inn.items():
             with contextlib.suppress(Exception):
                 if api_inn == 'None':
                     sql_update_query: str = f"""Update {self.table_name} set value = ? where key = ?"""
-                    data: Tuple[str, str] = (api_inn, value)
+                    data: Tuple[str, str] = (inn[1], value)
                     self.cur.execute(sql_update_query, data)
                     self.conn.commit()
-            self.cache_add_and_save(value, api_inn)
-        return api_inn, value
+            self.cache_add_and_save(value, inn[0])
+        return api_inn
