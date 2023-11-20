@@ -61,7 +61,7 @@ class ReferenceInn(object):
         Push all data to clickhouse.
         """
         client: Client = get_client(host=get_my_env_var('HOST'), database="default",
-                                    username="default", password=get_my_env_var('PASSWORD'))
+                                    username=get_my_env_var('USERNAME_DB'), password=get_my_env_var('PASSWORD'))
         basename: str = os.path.basename(self.filename)
         output_file_path: str = os.path.join(f"{os.path.dirname(self.directory)}/csv",
                                              f'{start_time_script}_{basename}')
