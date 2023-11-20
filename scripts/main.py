@@ -15,6 +15,7 @@ from fuzzywuzzy import fuzz
 from requests import Response
 from sqlite3 import Connection
 from notifiers import get_notifier
+from gensim.models import Word2Vec
 from notifiers.core import Provider
 from pandas import DataFrame, Series
 from inn_api import LegalEntitiesParser
@@ -33,6 +34,7 @@ class ReferenceInn(object):
         self.filename: str = filename
         self.directory = directory
         self.lock = Lock()
+        self.dict_cache = {}
 
     @staticmethod
     def connect_to_db() -> Tuple[Client, QueryResult]:
@@ -102,8 +104,21 @@ class ReferenceInn(object):
         # fuzz_company_name_two: int = fuzz.partial_ratio(company_name_en.upper(), translated.upper())
         data['confidence_rate'] = data["confidence_rate"]
 
+    def get_similarity_score(self, activity_main_type, tnved_group_name):
+        if activity_main_type and tnved_group_name:
+            activity_main_type = re.sub(r'[^\w\s]', '', activity_main_type.upper())
+            tnved_group_name = re.sub(r'[^\w\s]', '', tnved_group_name.upper())
+
+            # Создание модели Word2Vec
+            model = Word2Vec([activity_main_type.split(), tnved_group_name.split()], min_count=1)
+
+            # Вычисление косинусной близости
+            similarity = model.wv.n_similarity(activity_main_type.split(), tnved_group_name.split())
+            print("Семантическая близость предложений:", similarity)
+            return similarity
+
     def get_all_data(self, fts: QueryResult, provider: LegalEntitiesParser, data: dict, inn: Union[str, None],
-                     sentence: str, index: int, num_inn_in_fts: dict, list_inn_in_fts: list, translated: str = None,
+                     sentence: str, index: int, num_inn_in_fts: dict, list_inn_in_fts: list,
                      inn_count: int = 1, sum_count_inn: int = 1) -> None:
         """
         We get a unified company name from the sentence itself for the found INN. And then we are looking for a company
@@ -112,15 +127,27 @@ class ReferenceInn(object):
         logger.info(f"The processing and filling of data into the dictionary has begun. Data is {sentence}",
                     pid=current_thread().ident)
         data["sum_count_inn"] = sum_count_inn
-        self.join_fts(fts, data, inn, inn_count, num_inn_in_fts, translated)
-        data['company_name_rus'] = translated
+        self.join_fts(fts, data, inn, inn_count, num_inn_in_fts)
         data["company_inn_max_rank"] = num_inn_in_fts["company_inn_max_rank"]
         num_inn_in_fts["company_inn_max_rank"] += 1
-        # inn, company_name, is_cache = provider.get_company_name_by_inn(inn, index)
+        inn, company_name, activity_main, okved, is_cache = provider.get_company_name_by_inn(inn, index, self.dict_cache)
         data["company_inn"] = inn
-        self.compare_different_fuzz(data["company_name_unified"], translated, data)
+        data["activity_main_type_rusprofile"] = activity_main
+        data["okved"] = okved
+        try:
+            if data["tnved_group_name"]:
+                similarity = self.get_similarity_score(data["activity_main_type_rusprofile"],
+                                                       data["tnved_group_name"])
+                data["similarity"] = similarity
+            else:
+                similarity = self.get_similarity_score(data["activity_main_type_rusprofile"],
+                                                       data["goods_name"])
+                data["similarity"] = similarity
+        except Exception as ex:
+            logger.error(f"Error is Similarity score. Error is {ex}. Sentence is {sentence}")
+        # self.compare_different_fuzz(data["company_name_unified"], translated, data)
         # logger.info(f"Data was written successfully to the dictionary. Data is {sentence}", pid=current_thread().ident)
-        self.write_to_csv(index, data)
+        # self.write_to_csv(index, data)
         list_inn_in_fts.append(data.copy())
 
     def get_translated_sentence(self, sentence: str) -> str:
@@ -174,8 +201,7 @@ class ReferenceInn(object):
         #         self.get_all_data(fts, cache_inn, data, inn, sentence, index, num_inn_in_fts, list_inn_in_fts,
         #                           translated, inn_count, sum_count_inn)
         # else:
-        self.get_all_data(fts, cache_inn, data, data["company_inn"], sentence, index, num_inn_in_fts, list_inn_in_fts,
-                          data["company_name_rus"], inn_count=1, sum_count_inn=1)
+        self.get_all_data(fts, cache_inn, data, data["company_inn"], sentence, index, num_inn_in_fts, list_inn_in_fts, inn_count=1, sum_count_inn=1)
         self.write_existing_inn_from_fts(index, data, list_inn_in_fts, num_inn_in_fts, parsed_data)
 
     def write_existing_inn_from_fts(self, index: int, data: dict, list_inn_in_fts: list, num_inn_in_fts: dict,
@@ -189,25 +215,26 @@ class ReferenceInn(object):
         for dict_inn in list_inn_in_fts:
             dict_inn["count_inn_in_fts"] = num_inn_in_fts["num_inn_in_fts"]
             if dict_inn["is_fts_found"]:
-                self.write_to_json(index, dict_inn, parsed_data)
+                self.write_to_csv(index, dict_inn)
                 list_is_found_fts.append(True)
                 break
             else:
                 list_is_found_fts.append(False)
         if not list_inn_in_fts or not all(list_is_found_fts):
             max_dict_inn: dict = max(list_inn_in_fts, key=lambda x: x["company_inn_count"])
-            self.write_to_json(index, max_dict_inn, parsed_data)
+            self.write_to_csv(index, max_dict_inn)
 
     @staticmethod
-    def join_fts(fts: QueryResult, data: dict, inn: Union[str, None], inn_count: int, num_inn_in_fts: Dict[str, int],
-                 translated: str) -> None:
+    def join_fts(fts: QueryResult, data: dict, inn: Union[str, None], inn_count: int, num_inn_in_fts: Dict[str, int]) -> None:
         """
         Join FTS for checking INN.
         """
-        data["request_to_yandex"] = f"{translated} ИНН"
         data['company_inn_count'] = inn_count
         data["is_fts_found"] = False
         data["fts_company_name"] = None
+        data["activity_main_type_rusprofile"] = None
+        data["okved"] = None
+        data["similarity"] = None
         index_recipients_tin: int = fts.column_names.index('recipients_tin')
         index_name_of_the_contract_holder: int = fts.column_names.index('name_of_the_contract_holder')
         for rows in fts.result_rows:
@@ -228,14 +255,14 @@ class ReferenceInn(object):
         """
         Writing data to json.
         """
-        # basename: str = os.path.basename(self.filename)
-        # output_file_path: str = os.path.join(f"{os.path.dirname(self.directory)}/csv",
-        #                                      f'{data["original_file_parsed_on_test"]}_{basename}')
-        # if os.path.exists(output_file_path):
-        #     self.to_csv(output_file_path, data, 'a')
-        # else:
-        #     self.to_csv(output_file_path, data, 'w')
-        # logger.info(f"Data was written successfully to the file. Index is {index}", pid=current_thread().ident)
+        basename: str = os.path.basename(self.filename)
+        output_file_path: str = os.path.join(f"{os.path.dirname(self.directory)}/csv",
+                                             f'{data["original_file_parsed_on_test"]}_{basename}')
+        if os.path.exists(output_file_path):
+            self.to_csv(output_file_path, data, 'a')
+        else:
+            self.to_csv(output_file_path, data, 'w')
+        logger.info(f"Data was written successfully to the file. Index is {index}", pid=current_thread().ident)
 
     def write_to_json(self, index: int, data: dict, parsed_data: list) -> None:
         """

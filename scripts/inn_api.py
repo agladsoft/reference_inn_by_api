@@ -1,7 +1,10 @@
 import re
 import sqlite3
+import os
+import time
 import requests
 import contextlib
+from bs4 import BeautifulSoup, Tag, ResultSet
 import validate_inn
 from requests import Response
 from typing import Union, Tuple
@@ -21,19 +24,67 @@ class MyError(Exception):
 
 class LegalEntitiesParser(object):
 
-    def get_company_name_by_inn(self, inn: str, index: int) -> \
-            Tuple[Union[str, None], Union[str, None], bool]:
+    def get_company_name_from_legal_entities_parser(self, value: str, _id: str, dict_cache: dict, var_api_name: str = None):
+        """
+        Looking for a company name unified from the website of legal entities.
+        """
+        activity = None
+        code = None
+        if value in dict_cache:
+            return value, *dict_cache[value]
+        try:
+            session: HTMLSession = HTMLSession()
+            logger.info(f"Before request. Data is {value}", pid=os.getpid())
+            api_inn: Response = session.get(f'https://www.rusprofile.ru/search?query={value}')
+            logger.info(f"After request. Data is {value}", pid=os.getpid())
+            html_code: str = api_inn.html.html
+            html: BeautifulSoup = BeautifulSoup(html_code, 'html.parser')
+            page_inn: Tag = html.find('span', attrs={'id': _id})
+            page_name: Tag = html.find('h1', attrs={'itemprop': 'name'})
+            page_many_inn: ResultSet = html.findAll('span', attrs={'class': 'finded-text'})
+            page_many_company: ResultSet = html.findAll("div", attrs={"class": "company-item"})
+            company_row: ResultSet = html.findAll("div", attrs={"class": "company-row"})
+            for row in company_row:
+                main_type = row.find("span", {"class", "company-info__title"})
+                if main_type and main_type.text.strip() == "Основной вид деятельности":
+                    main_type_text = row.find("span", {"class", "company-info__text"}).text.strip()
+                    matches = re.match(r"(.+) \((.+)\)", main_type_text)
+                    activity = matches.group(1)
+                    code = matches.group(2)
+                    print(activity)
+                    print(code)
+                    break
+            for inn, inn_name in zip(page_many_inn, page_many_company):
+                if not page_inn and not page_name and inn.text == value:
+                    var_api_name: str = inn_name.find("span", {"class", "finded-text"}).parent.parent.parent.parent. \
+                        find("a").text.strip()
+                    var_api_name = re.sub(" +", " ", var_api_name)
+                    break
+            if page_name:
+                var_api_name = page_name.text.strip()
+                logger.info(f"Unified company is {var_api_name}. INN is {value}", pid=os.getpid())
+            dict_cache[value] = var_api_name, activity, code
+            return value, var_api_name, activity, code
+        except (IndexError, ValueError, TypeError):
+            return value, var_api_name, activity, code
+
+    def get_company_name_by_inn(self, inn: str, index: int, dict_cache):
         """
         Getting the company name unified from the cache, if there is one.
         Otherwise, we are looking for verification of legal entities on websites.
         """
-        data: dict = {
-            "inn": inn
-        }
-        response: Response = requests.post(f"http://{get_my_env_var('HOST')}:8003", json=data)
-        if response.status_code == 200:
-            data = response.json()
-            return inn, data[0][0]['value'], data[1]
+        api_inn, api_name = None, None
+        if inn != 'None':
+            if len(inn) == 10:
+                api_inn, api_name, activity_main, okved = self.get_company_name_from_legal_entities_parser(inn, 'clip_inn', dict_cache)
+            elif len(inn) == 12:
+                api_inn, api_name, activity_main, okved = self.get_company_name_from_legal_entities_parser(inn, 'req_inn', dict_cache)
+        else:
+            logger.error(f"Not found INN {api_inn} in rusprofile. Index is {index}. Unified company name is "
+                         f"{api_name}", pid=os.getpid())
+            logger_stream.error(f"Not found INN {api_inn} in rusprofile. Index is {index}."
+                                f" Unified company name is {api_name}")
+        return api_inn, api_name, activity_main, okved, False
 
 
 class SearchEngineParser(LegalEntitiesParser):
