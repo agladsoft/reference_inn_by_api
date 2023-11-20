@@ -114,14 +114,16 @@ class ReferenceInn(object):
         """
         logger.info(f"The processing and filling of data into the dictionary has begun. Data is {sentence}",
                     pid=current_thread().ident)
+        data["company_inn"] = inn
         data["sum_count_inn"] = sum_count_inn
         self.join_fts(fts, data, inn, inn_count, num_inn_in_fts, translated)
         data['company_name_rus'] = translated
         data["company_inn_max_rank"] = num_inn_in_fts["company_inn_max_rank"]
         num_inn_in_fts["company_inn_max_rank"] += 1
-        inn, company_name, is_cache = provider.get_company_name_by_inn(inn, index)
+        if not data["is_fts_found"]:
+            return
+        company_name, is_cache = provider.get_company_name_by_inn(inn, index)
         data["is_company_name_from_cache"] = is_cache
-        data["company_inn"] = inn
         data["company_name_unified"] = company_name
         self.compare_different_fuzz(company_name, translated, data)
         logger.info(f"Data was written successfully to the dictionary. Data is {sentence}", pid=current_thread().ident)
