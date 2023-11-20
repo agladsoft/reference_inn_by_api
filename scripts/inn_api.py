@@ -21,7 +21,7 @@ class MyError(Exception):
 class LegalEntitiesParser(object):
 
     def get_company_name_by_inn(self, inn: str, index: int) -> \
-            Tuple[Union[str, None], Union[str, None], bool]:
+            Tuple[Union[str, None], Union[str, None], Union[bool, None]]:
         """
         Getting the company name unified from the cache, if there is one.
         Otherwise, we are looking for verification of legal entities on websites.
@@ -29,13 +29,17 @@ class LegalEntitiesParser(object):
         data: dict = {
             "inn": inn
         }
-        response: Response = requests.post(f"http://service_inn:8003", json=data)
-        if response.status_code == 200:
+        try:
+            response: Response = requests.post(f"http://service_inn:8003", json=data)
+            response.raise_for_status()
             data = response.json()
             if list_dadata := data[0]:
                 return inn, list_dadata[0].get('value'), data[1]
             else:
                 return inn, None, data[1]
+        except requests.exceptions.RequestException as e:
+            logger.error(f"An error occurred during the API request: {str(e)}")
+            return inn, None, None
 
 
 class SearchEngineParser(LegalEntitiesParser):
