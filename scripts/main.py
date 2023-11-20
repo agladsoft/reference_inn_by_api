@@ -120,6 +120,7 @@ class ReferenceInn(object):
         data["company_inn_max_rank"] = num_inn_in_fts["company_inn_max_rank"]
         num_inn_in_fts["company_inn_max_rank"] += 1
         inn, company_name, is_cache = provider.get_company_name_by_inn(inn, index)
+        data["is_company_name_from_cache"] = is_cache
         data["company_inn"] = inn
         data["company_name_unified"] = company_name
         self.compare_different_fuzz(company_name, translated, data)
