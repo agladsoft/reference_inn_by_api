@@ -32,7 +32,10 @@ class LegalEntitiesParser(object):
         response: Response = requests.post(f"http://service_inn:8003", json=data)
         if response.status_code == 200:
             data = response.json()
-            return inn, data[0][0]['value'], data[1]
+            if list_dadata := data[0]:
+                return inn, list_dadata[0].get('value'), data[1]
+            else:
+                return inn, None, data[1]
 
 
 class SearchEngineParser(LegalEntitiesParser):
