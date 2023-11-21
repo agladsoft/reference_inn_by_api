@@ -60,14 +60,17 @@ class ReferenceInn(object):
         """
         Push all data to clickhouse.
         """
-        client: Client = get_client(host=get_my_env_var('HOST'), database="default",
-                                    username=get_my_env_var('USERNAME_DB'), password=get_my_env_var('PASSWORD'))
-        basename: str = os.path.basename(self.filename)
-        output_file_path: str = os.path.join(f"{os.path.dirname(self.directory)}/csv",
-                                             f'{start_time_script}_{basename}')
-        df: DataFrame = pd.read_csv(output_file_path, dtype={"company_inn": str, "confidence_rate": "Int64"})
-        df = df.replace({np.nan: None, "NaT": None})
-        client.insert_df("reference_inn_all", df, database="default")
+        try:
+            client: Client = get_client(host=get_my_env_var('HOST'), database="default",
+                                        username=get_my_env_var('USERNAME_DB'), password=get_my_env_var('PASSWORD'))
+            basename: str = os.path.basename(self.filename)
+            output_file_path: str = os.path.join(f"{os.path.dirname(self.directory)}/csv",
+                                                 f'{start_time_script}_{basename}')
+            df: DataFrame = pd.read_csv(output_file_path, dtype={"company_inn": str, "confidence_rate": "Int64"})
+            df = df.replace({np.nan: None, "NaT": None})
+            client.insert_df("reference_inn_all", df, database="default")
+        except Exception as ex:
+            logger.error(f"Error is {ex}")
 
     @staticmethod
     def replace_forms_organizations(company_name: str) -> str:
