@@ -137,7 +137,7 @@ class ReferenceInn(object):
         data['company_name_rus'] = translated
         data["company_inn_max_rank"] = num_inn_in_fts["company_inn_max_rank"]
         num_inn_in_fts["company_inn_max_rank"] += 1
-        if not data["is_fts_found"] or enforce_get_company:
+        if not data["is_fts_found"] and not enforce_get_company:
             return
         company_name, is_cache = provider.get_company_name_by_inn(inn, index)
         data["is_company_name_from_cache"] = is_cache
