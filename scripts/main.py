@@ -44,7 +44,8 @@ class ReferenceInn(object):
             client: Client = get_client(host=get_my_env_var('HOST'), database=get_my_env_var('DATABASE'),
                                         username=get_my_env_var('USERNAME_DB'), password=get_my_env_var('PASSWORD'))
             logger.info("Successfully connect to db")
-            fts: QueryResult = client.query("SELECT DISTINCT recipients_tin, name_of_the_contract_holder FROM fts")
+            fts: QueryResult = client.query("SELECT DISTINCT recipients_tin, senders_tin, name_of_the_contract_holder "
+                                            "FROM fts")
             # Чтобы проверить, есть ли данные. Так как переменная образуется, но внутри нее могут быть ошибки.
             print(fts.result_rows[0])
         except Exception as ex_connect:
@@ -209,9 +210,10 @@ class ReferenceInn(object):
         data["is_fts_found"] = False
         data["fts_company_name"] = None
         index_recipients_tin: int = fts.column_names.index('recipients_tin')
+        index_senders_tin: int = fts.column_names.index('senders_tin')
         index_name_of_the_contract_holder: int = fts.column_names.index('name_of_the_contract_holder')
         for rows in fts.result_rows:
-            if inn and rows[index_recipients_tin] == inn:
+            if inn and (rows[index_recipients_tin] == inn or rows[index_senders_tin] == inn):
                 data["is_fts_found"] = True
                 num_inn_in_fts["num_inn_in_fts"] += 1
                 data["fts_company_name"] = rows[index_name_of_the_contract_holder]
