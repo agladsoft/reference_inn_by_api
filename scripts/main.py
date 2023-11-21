@@ -196,7 +196,7 @@ class ReferenceInn(object):
         num_inn_in_fts: Dict[str, int] = {"num_inn_in_fts": 0, "company_inn_max_rank": 1}
         if list_inn:
             self.get_all_data(fts, cache_inn, data, list_inn[0], sentence, index, num_inn_in_fts, list_inn_in_fts,
-                              translated)
+                              translated, enforce_get_company=True)
         else:
             cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", self.conn)
             if api_inn := cache_name_inn.get_company_name_by_inn(translated, index):
