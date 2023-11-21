@@ -105,9 +105,21 @@ class ReferenceInn(object):
             fuzz_company_name_two: int = fuzz.partial_ratio(company_name_en.upper(), translated.upper())
             data['confidence_rate'] = max(fuzz_company_name, fuzz_company_name_two)
 
-    def get_all_data(self, fts: QueryResult, provider: LegalEntitiesParser, data: dict, inn: Union[str, None],
-                     sentence: str, index: int, num_inn_in_fts: dict, list_inn_in_fts: list, translated:
-                     Optional[str] = None, inn_count: int = 1, sum_count_inn: int = 1) -> None:
+    def get_all_data(self,
+                     fts: QueryResult,
+                     provider: LegalEntitiesParser,
+                     data: dict,
+                     inn: Union[str, None],
+                     sentence: str,
+                     index: int,
+                     num_inn_in_fts: dict,
+                     list_inn_in_fts: list,
+                     translated:
+                     Optional[str] = None,
+                     inn_count: int = 1,
+                     sum_count_inn: int = 1,
+                     enforce_get_company: bool = False
+                     ) -> None:
         """
         We get a unified company name from the sentence itself for the found INN. And then we are looking for a company
         on the website https://www.rusprofile.ru/.
@@ -120,7 +132,7 @@ class ReferenceInn(object):
         data['company_name_rus'] = translated
         data["company_inn_max_rank"] = num_inn_in_fts["company_inn_max_rank"]
         num_inn_in_fts["company_inn_max_rank"] += 1
-        if not data["is_fts_found"]:
+        if not data["is_fts_found"] or enforce_get_company:
             return
         company_name, is_cache = provider.get_company_name_by_inn(inn, index)
         data["is_company_name_from_cache"] = is_cache
@@ -181,6 +193,10 @@ class ReferenceInn(object):
                 for inn, inn_count in api_inn.items():
                     self.get_all_data(fts, cache_inn, data, inn, sentence, index, num_inn_in_fts, list_inn_in_fts,
                                       translated, inn_count, sum_count_inn)
+                if not list_inn_in_fts:
+                    self.get_all_data(fts, cache_inn, data, max(api_inn, key=api_inn.get), sentence, index,
+                                      num_inn_in_fts, list_inn_in_fts, translated, inn_count=0,
+                                      sum_count_inn=sum_count_inn, enforce_get_company=True)
             else:
                 self.get_all_data(fts, cache_inn, data, None, sentence, index, num_inn_in_fts, list_inn_in_fts,
                                   translated, inn_count=0, sum_count_inn=0)
