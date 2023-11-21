@@ -220,7 +220,7 @@ class ReferenceInn(object):
             else:
                 list_is_found_fts.append(False)
         if not list_inn_in_fts or not all(list_is_found_fts):
-            max_dict_inn: dict = max(list_inn_in_fts, key=lambda x: x["company_inn_count"])
+            max_dict_inn = max(list_inn_in_fts, key=lambda x: x["company_inn_count"]) if list_inn_in_fts else data
             self.write_to_json(index, max_dict_inn)
 
     @staticmethod
