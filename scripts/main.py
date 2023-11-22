@@ -47,7 +47,8 @@ class ReferenceInn(object):
             client: Client = get_client(host=get_my_env_var('HOST'), database=get_my_env_var('DATABASE'),
                                         username=get_my_env_var('USERNAME_DB'), password=get_my_env_var('PASSWORD'))
             logger.info("Successfully connect to db")
-            fts: QueryResult = client.query("SELECT DISTINCT recipients_tin, name_of_the_contract_holder FROM fts")
+            fts: QueryResult = client.query("SELECT DISTINCT recipients_tin, senders_tin, name_of_the_contract_holder "
+                                            "FROM fts")
             # Чтобы проверить, есть ли данные. Так как переменная образуется, но внутри нее могут быть ошибки.
             print(fts.result_rows[0])
         except Exception as ex_connect:
@@ -104,25 +105,25 @@ class ReferenceInn(object):
                 company_name_en: str = GoogleTranslator(source='ru', target='en').translate(company_name[:4500])
             except exceptions.NotValidPayload:
                 company_name_en = company_name
-            data["company_name_unified_en"] = company_name_en
             fuzz_company_name_two: int = fuzz.partial_ratio(company_name_en.upper(), translated.upper())
             data['confidence_rate'] = max(fuzz_company_name, fuzz_company_name_two)
 
-    def get_all_data(self,
-                     fts: QueryResult,
-                     provider: LegalEntitiesParser,
-                     data: dict,
-                     inn: Union[str, None],
-                     sentence: str,
-                     index: int,
-                     num_inn_in_fts: dict,
-                     list_inn_in_fts: list,
-                     translated:
-                     Optional[str] = None,
-                     inn_count: int = 1,
-                     sum_count_inn: int = 1,
-                     enforce_get_company: bool = False
-                     ) -> None:
+    def get_all_data(
+            self,
+            fts: QueryResult,
+            provider: LegalEntitiesParser,
+            data: dict,
+            inn: Union[str, None],
+            sentence: str,
+            index: int,
+            num_inn_in_fts: dict,
+            list_inn_in_fts: list,
+            translated:
+            Optional[str] = None,
+            inn_count: int = 1,
+            sum_count_inn: int = 1,
+            enforce_get_company: bool = False
+    ) -> None:
         """
         We get a unified company name from the sentence itself for the found INN. And then we are looking for a company
         on the website https://www.rusprofile.ru/.
@@ -135,7 +136,7 @@ class ReferenceInn(object):
         data['company_name_rus'] = translated
         data["company_inn_max_rank"] = num_inn_in_fts["company_inn_max_rank"]
         num_inn_in_fts["company_inn_max_rank"] += 1
-        if not data["is_fts_found"] or enforce_get_company:
+        if not data["is_fts_found"] and not enforce_get_company:
             return
         company_name, is_cache = provider.get_company_name_by_inn(inn, index)
         data["is_company_name_from_cache"] = is_cache
@@ -178,8 +179,14 @@ class ReferenceInn(object):
                     pid=current_thread().ident)
         self.get_company_name_from_internet(list_inn, cache_inn, sentence, data, index, fts)
 
-    def get_company_name_from_internet(self, list_inn: list, cache_inn: LegalEntitiesParser, sentence: str, data: dict,
-                                       index: int, fts: QueryResult) -> None:
+    def get_company_name_from_internet(
+            self, list_inn: list,
+            cache_inn: LegalEntitiesParser,
+            sentence: str,
+            data: dict,
+            index: int,
+            fts: QueryResult
+    ) -> None:
         """
         Getting company name from dadata or get inn from Yandex, then get company name from dadata.
         """
@@ -188,22 +195,40 @@ class ReferenceInn(object):
         num_inn_in_fts: Dict[str, int] = {"num_inn_in_fts": 0, "company_inn_max_rank": 1}
         if list_inn:
             self.get_all_data(fts, cache_inn, data, list_inn[0], sentence, index, num_inn_in_fts, list_inn_in_fts,
-                              translated)
+                              translated, enforce_get_company=True)
         else:
             cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", self.conn)
             if api_inn := cache_name_inn.get_company_name_by_inn(translated, index):
-                sum_count_inn: int = sum(api_inn.values())
-                for inn, inn_count in api_inn.items():
-                    self.get_all_data(fts, cache_inn, data, inn, sentence, index, num_inn_in_fts, list_inn_in_fts,
-                                      translated, inn_count, sum_count_inn)
-                if not list_inn_in_fts:
-                    self.get_all_data(fts, cache_inn, data, max(api_inn, key=api_inn.get), sentence, index,
-                                      num_inn_in_fts, list_inn_in_fts, translated, inn_count=0,
-                                      sum_count_inn=sum_count_inn, enforce_get_company=True)
+                self.parse_all_found_inn(fts, api_inn, cache_inn, sentence, translated, data, index, num_inn_in_fts,
+                                         list_inn_in_fts)
             else:
                 self.get_all_data(fts, cache_inn, data, None, sentence, index, num_inn_in_fts, list_inn_in_fts,
                                   translated, inn_count=0, sum_count_inn=0)
         self.write_existing_inn_from_fts(index, data, list_inn_in_fts, num_inn_in_fts)
+
+    def parse_all_found_inn(
+            self,
+            fts: QueryResult,
+            api_inn: dict,
+            cache_inn: LegalEntitiesParser,
+            sentence: str,
+            translated: str,
+            data: dict,
+            index: int,
+            num_inn_in_fts: dict,
+            list_inn_in_fts: list
+    ) -> None:
+        """
+        We extract data on all found INN from Yandex.
+        """
+        sum_count_inn: int = sum(api_inn.values())
+        for inn, inn_count in api_inn.items():
+            self.get_all_data(fts, cache_inn, data, inn, sentence, index, num_inn_in_fts, list_inn_in_fts,
+                              translated, inn_count, sum_count_inn)
+        if not list_inn_in_fts:
+            self.get_all_data(fts, cache_inn, data, max(api_inn, key=api_inn.get), sentence, index,
+                              num_inn_in_fts, list_inn_in_fts, translated, inn_count=0,
+                              sum_count_inn=sum_count_inn, enforce_get_company=True)
 
     def write_existing_inn_from_fts(self, index: int, data: dict, list_inn_in_fts: list, num_inn_in_fts: dict) -> None:
         """
@@ -224,8 +249,14 @@ class ReferenceInn(object):
             self.write_to_json(index, max_dict_inn)
 
     @staticmethod
-    def join_fts(fts: QueryResult, data: dict, inn: Union[str, None], inn_count: int, num_inn_in_fts: Dict[str, int],
-                 translated: str) -> None:
+    def join_fts(
+            fts: QueryResult,
+            data: dict,
+            inn: Union[str, None],
+            inn_count: int,
+            num_inn_in_fts: Dict[str, int],
+            translated: str
+    ) -> None:
         """
         Join FTS for checking INN.
         """
@@ -234,9 +265,10 @@ class ReferenceInn(object):
         data["is_fts_found"] = False
         data["fts_company_name"] = None
         index_recipients_tin: int = fts.column_names.index('recipients_tin')
+        index_senders_tin: int = fts.column_names.index('senders_tin')
         index_name_of_the_contract_holder: int = fts.column_names.index('name_of_the_contract_holder')
         for rows in fts.result_rows:
-            if inn and rows[index_recipients_tin] == inn:
+            if inn and (rows[index_recipients_tin] == inn or rows[index_senders_tin] == inn):
                 data["is_fts_found"] = True
                 num_inn_in_fts["num_inn_in_fts"] += 1
                 data["fts_company_name"] = rows[index_name_of_the_contract_holder]
@@ -272,8 +304,14 @@ class ReferenceInn(object):
             json.dump(data, f, ensure_ascii=False, indent=4)
             logger.info(f"Data was written successfully to the file. Index is {index}", pid=current_thread().ident)
 
-    def add_index_in_queue(self, not_parsed_data: List[dict], retry_queue: Queue, is_queue: bool, sentence: str,
-                           index: int) -> None:
+    def add_index_in_queue(
+            self,
+            not_parsed_data: List[dict],
+            retry_queue: Queue,
+            is_queue: bool,
+            sentence: str,
+            index: int
+    ) -> None:
         """
         Adding an index to the queue or writing empty data.
         """
@@ -294,8 +332,16 @@ class ReferenceInn(object):
         data['original_file_name'] = os.path.basename(self.filename)
         data['original_file_parsed_on'] = start_time_script
 
-    def parse_data(self, not_parsed_data: List[dict], index: int, data: dict, fts: QueryResult, start_time_script,
-                   retry_queue: Queue, is_queue: bool = False) -> None:
+    def parse_data(
+            self,
+            not_parsed_data: List[dict],
+            index: int,
+            data: dict,
+            fts: QueryResult,
+            start_time_script,
+            retry_queue: Queue,
+            is_queue: bool = False
+    ) -> None:
         """
         Processing each row.
         """
