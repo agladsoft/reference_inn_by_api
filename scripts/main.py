@@ -38,7 +38,8 @@ class ReferenceInn(object):
         self.lock: Lock = Lock()
 
     @staticmethod
-    def connect_to_db() -> Tuple[Client, QueryResult]:
+    def connect_to_db() -> Tuple[Client, dict]:
+        # sourcery skip: use-dictionary-union
         """
         Connecting to clickhouse.
         :return: Client ClickHouse.
@@ -47,15 +48,20 @@ class ReferenceInn(object):
             client: Client = get_client(host=get_my_env_var('HOST'), database=get_my_env_var('DATABASE'),
                                         username=get_my_env_var('USERNAME_DB'), password=get_my_env_var('PASSWORD'))
             logger.info("Successfully connect to db")
-            fts: QueryResult = client.query("SELECT DISTINCT recipients_tin, senders_tin, name_of_the_contract_holder "
-                                            "FROM fts")
+            fts: QueryResult = client.query(
+                "SELECT recipients_tin, senders_tin, name_of_the_recipient, senders_name "
+                "FROM fts "
+                "GROUP BY recipients_tin, senders_tin, name_of_the_recipient, senders_name"
+            )
             # Чтобы проверить, есть ли данные. Так как переменная образуется, но внутри нее могут быть ошибки.
             print(fts.result_rows[0])
+            fts_recipients_inn: dict = {row[0]: row[2] for row in fts.result_rows}
+            fts_senders_inn: dict = {row[1]: row[3] for row in fts.result_rows}
+            return client, {**fts_recipients_inn, **fts_senders_inn}
         except Exception as ex_connect:
             logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
             print("error_connect_db", file=sys.stderr)
             sys.exit(1)
-        return client, fts
 
     def push_data_to_db(self, start_time_script: str):
         """
@@ -110,7 +116,7 @@ class ReferenceInn(object):
 
     def get_all_data(
             self,
-            fts: QueryResult,
+            fts: dict,
             provider: LegalEntitiesParser,
             data: dict,
             inn: Union[str, None],
@@ -161,7 +167,7 @@ class ReferenceInn(object):
             translated = re.sub(" +", " ", translated).strip()
         return translated
 
-    def get_inn_from_row(self, sentence: str, data: dict, index: int, fts: QueryResult) -> None:
+    def get_inn_from_row(self, sentence: str, data: dict, index: int, fts: dict) -> None:
         """
         Full processing of the sentence, including 1). inn search by offer -> company search by inn,
         2). inn search in yandex by request -> company search by inn.
@@ -185,7 +191,7 @@ class ReferenceInn(object):
             sentence: str,
             data: dict,
             index: int,
-            fts: QueryResult
+            fts: dict
     ) -> None:
         """
         Getting company name from dadata or get inn from Yandex, then get company name from dadata.
@@ -208,7 +214,7 @@ class ReferenceInn(object):
 
     def parse_all_found_inn(
             self,
-            fts: QueryResult,
+            fts: dict,
             api_inn: dict,
             cache_inn: LegalEntitiesParser,
             sentence: str,
@@ -250,7 +256,7 @@ class ReferenceInn(object):
 
     @staticmethod
     def join_fts(
-            fts: QueryResult,
+            fts: dict,
             data: dict,
             inn: Union[str, None],
             inn_count: int,
@@ -264,14 +270,10 @@ class ReferenceInn(object):
         data['company_inn_count'] = inn_count
         data["is_fts_found"] = False
         data["fts_company_name"] = None
-        index_recipients_tin: int = fts.column_names.index('recipients_tin')
-        index_senders_tin: int = fts.column_names.index('senders_tin')
-        index_name_of_the_contract_holder: int = fts.column_names.index('name_of_the_contract_holder')
-        for rows in fts.result_rows:
-            if inn and (rows[index_recipients_tin] == inn or rows[index_senders_tin] == inn):
-                data["is_fts_found"] = True
-                num_inn_in_fts["num_inn_in_fts"] += 1
-                data["fts_company_name"] = rows[index_name_of_the_contract_holder]
+        if inn in fts:
+            data["is_fts_found"] = True
+            num_inn_in_fts["num_inn_in_fts"] += 1
+            data["fts_company_name"] = fts[inn]
 
     def to_csv(self, output_file_path: str, data: dict, operator: str):
         with self.lock:
@@ -337,7 +339,7 @@ class ReferenceInn(object):
             not_parsed_data: List[dict],
             index: int,
             data: dict,
-            fts: QueryResult,
+            fts: dict,
             start_time_script,
             retry_queue: Queue,
             is_queue: bool = False
@@ -410,7 +412,7 @@ class ReferenceInn(object):
             sys.exit(1)
 
     def start_multiprocessing_with_queue(self, retry_queue: Queue, not_parsed_data: List[dict],
-                                         fts_results: QueryResult, start_time: str) -> None:
+                                         fts_results: dict, start_time: str) -> None:
         """
         Starting queue processing using a multithreading.
         """
@@ -424,7 +426,7 @@ class ReferenceInn(object):
                     executor.submit(self.parse_data, not_parsed_data, index_queue, not_parsed_data[index_queue - 2],
                                     fts_results, start_time, retry_queue, True)
 
-    def start_multiprocessing(self, retry_queue: Queue, not_parsed_data: List[dict], fts_results: QueryResult,
+    def start_multiprocessing(self, retry_queue: Queue, not_parsed_data: List[dict], fts_results: dict,
                               start_time: str) -> None:
         """
         Starting processing using a multithreading.
