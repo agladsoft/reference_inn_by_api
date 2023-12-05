@@ -21,7 +21,7 @@ from inn_api import LegalEntitiesParser
 from clickhouse_connect import get_client
 from pandas.io.parsers import TextFileReader
 from clickhouse_connect.driver import Client
-from typing import List, Tuple, Union, Dict, Optional
+from typing import List, Tuple, Union, Dict, Optional, Any
 from clickhouse_connect.driver.query import QueryResult
 from deep_translator import GoogleTranslator, exceptions
 from threading import Thread, current_thread, Semaphore, Lock
@@ -35,7 +35,7 @@ class ReferenceInn(object):
         self.lock = Lock()
 
     @staticmethod
-    def connect_to_db() -> Tuple[Client, QueryResult]:
+    def connect_to_db() -> Tuple[Client, Dict[Any, Any]]:
         """
         Connecting to clickhouse.
         :return: Client ClickHouse.
@@ -44,15 +44,20 @@ class ReferenceInn(object):
             client: Client = get_client(host=get_my_env_var('HOST'), database=get_my_env_var('DATABASE'),
                                         username=get_my_env_var('USERNAME_DB'), password=get_my_env_var('PASSWORD'))
             logger.info("Successfully connect to db")
-            fts: QueryResult = client.query("SELECT DISTINCT recipients_tin, senders_tin, name_of_the_contract_holder "
-                                            "FROM fts")
+            fts: QueryResult = client.query(
+                "SELECT recipients_tin, senders_tin, name_of_the_recipient, senders_name "
+                "FROM fts "
+                "GROUP BY recipients_tin, senders_tin, name_of_the_recipient, senders_name"
+            )
             # Чтобы проверить, есть ли данные. Так как переменная образуется, но внутри нее могут быть ошибки.
             print(fts.result_rows[0])
+            fts_recipients_inn: dict = {row[0]: row[2] for row in fts.result_rows}
+            fts_senders_inn: dict = {row[1]: row[3] for row in fts.result_rows}
+            return client, {**fts_recipients_inn, **fts_senders_inn}
         except Exception as ex_connect:
             logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
             print("error_connect_db", file=sys.stderr)
             sys.exit(1)
-        return client, fts
 
     def push_data_to_db(self, start_time_script: str):
         """
@@ -103,7 +108,7 @@ class ReferenceInn(object):
         # fuzz_company_name_two: int = fuzz.partial_ratio(company_name_en.upper(), translated.upper())
         data['confidence_rate'] = data["confidence_rate"]
 
-    def get_all_data(self, fts: QueryResult, provider: LegalEntitiesParser, data: dict, inn: Union[str, None],
+    def get_all_data(self, fts: dict, provider: LegalEntitiesParser, data: dict, inn: Union[str, None],
                      sentence: str, index: int, num_inn_in_fts: dict, list_inn_in_fts: list, translated: str = None,
                      inn_count: int = 1, sum_count_inn: int = 1) -> None:
         """
@@ -115,7 +120,7 @@ class ReferenceInn(object):
         data["sum_count_inn"] = sum_count_inn
         self.join_fts(fts, data, inn, inn_count, num_inn_in_fts, translated)
         data['company_name_rus'] = translated
-        data["company_inn_max_rank"] = num_inn_in_fts["company_inn_max_rank"]
+        data["company_inn_max_rank"] = data["company_inn_max_rank"]
         num_inn_in_fts["company_inn_max_rank"] += 1
         # inn, company_name, is_cache = provider.get_company_name_by_inn(inn, index)
         data["company_inn"] = inn
@@ -138,7 +143,7 @@ class ReferenceInn(object):
         translated = re.sub(" +", " ", translated).strip()
         return translated
 
-    def get_inn_from_row(self, sentence: str, data: dict, index: int, fts: QueryResult, parsed_data: list) -> None:
+    def get_inn_from_row(self, sentence: str, data: dict, index: int, fts: dict, parsed_data: list) -> None:
         """
         Full processing of the sentence, including 1). inn search by offer -> company search by inn,
         2). inn search in yandex by request -> company search by inn.
@@ -157,7 +162,7 @@ class ReferenceInn(object):
         self.get_company_name_from_internet(list_inn, cache_inn, sentence, data, index, fts, parsed_data)
 
     def get_company_name_from_internet(self, list_inn: list, cache_inn: LegalEntitiesParser, sentence: str, data: dict,
-                                       index: int, fts: QueryResult, parsed_data: list) -> None:
+                                       index: int, fts: dict, parsed_data: list) -> None:
         """
         Getting company name from dadata or get inn from Yandex, then get company name from dadata.
         """
@@ -200,23 +205,19 @@ class ReferenceInn(object):
             self.write_to_json(index, max_dict_inn, parsed_data)
 
     @staticmethod
-    def join_fts(fts: QueryResult, data: dict, inn: Union[str, None], inn_count: int, num_inn_in_fts: Dict[str, int],
+    def join_fts(fts: dict, data: dict, inn: Union[str, None], inn_count: int, num_inn_in_fts: Dict[str, int],
                  translated: str) -> None:
         """
         Join FTS for checking INN.
         """
-        data["request_to_yandex"] = f"{translated} ИНН"
+        data["request_to_yandex"] = data["request_to_yandex"]
         data['company_inn_count'] = inn_count
         data["is_fts_found"] = False
         data["fts_company_name"] = None
-        index_recipients_tin: int = fts.column_names.index('recipients_tin')
-        index_senders_tin: int = fts.column_names.index('senders_tin')
-        index_name_of_the_contract_holder: int = fts.column_names.index('name_of_the_contract_holder')
-        for rows in fts.result_rows:
-            if inn and (rows[index_recipients_tin] == inn or rows[index_senders_tin] == inn):
-                data["is_fts_found"] = True
-                num_inn_in_fts["num_inn_in_fts"] += 1
-                data["fts_company_name"] = rows[index_name_of_the_contract_holder]
+        if inn in fts:
+            data["is_fts_found"] = True
+            num_inn_in_fts["num_inn_in_fts"] += 1
+            data["fts_company_name"] = fts[inn]
 
     def to_csv(self, output_file_path: str, data: dict, operator: str):
         with self.lock:
@@ -230,24 +231,24 @@ class ReferenceInn(object):
         """
         Writing data to json.
         """
-        # basename: str = os.path.basename(self.filename)
-        # output_file_path: str = os.path.join(f"{os.path.dirname(self.directory)}/csv",
-        #                                      f'{data["original_file_parsed_on_test"]}_{basename}')
-        # if os.path.exists(output_file_path):
-        #     self.to_csv(output_file_path, data, 'a')
-        # else:
-        #     self.to_csv(output_file_path, data, 'w')
-        # logger.info(f"Data was written successfully to the file. Index is {index}", pid=current_thread().ident)
+        basename: str = os.path.basename(self.filename)
+        output_file_path: str = os.path.join(f"{os.path.dirname(self.directory)}/csv",
+                                             f'{data["original_file_parsed_on_test"]}_{basename}')
+        if os.path.exists(output_file_path):
+            self.to_csv(output_file_path, data, 'a')
+        else:
+            self.to_csv(output_file_path, data, 'w')
+        logger.info(f"Data was written successfully to the file. Index is {index}", pid=current_thread().ident)
 
     def write_to_json(self, index: int, data: dict, parsed_data: list) -> None:
         """
         Writing data to json.
         """
-        basename: str = os.path.basename(self.filename)
-        output_file_path: str = os.path.join(self.directory, f'{basename}_{index}.json')
-        with open(f"{output_file_path}", 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
-            logger.info(f"Data was written successfully to the file. Index is {index}", pid=current_thread().ident)
+        # basename: str = os.path.basename(self.filename)
+        # output_file_path: str = os.path.join(self.directory, f'{basename}_{index}.json')
+        # with open(f"{output_file_path}", 'w', encoding='utf-8') as f:
+        #     json.dump(data, f, ensure_ascii=False, indent=4)
+        #     logger.info(f"Data was written successfully to the file. Index is {index}", pid=current_thread().ident)
 
     def add_index_in_queue(self, not_parsed_data: List[dict], retry_queue: Queue, is_queue: bool, sentence: str,
                            index: int) -> None:
@@ -272,7 +273,7 @@ class ReferenceInn(object):
         # data['original_file_name'] = os.path.basename(self.filename)
         # data['original_file_parsed_on'] = start_time_script
 
-    def parse_data(self, not_parsed_data: List[dict], index: int, data: dict, fts: QueryResult, start_time_script,
+    def parse_data(self, not_parsed_data: List[dict], index: int, data: dict, fts: dict, start_time_script,
                    retry_queue: Queue, semaphore: Semaphore, parsed_data: list, is_queue: bool = False) -> None:
         """
         Processing each row.
@@ -365,7 +366,7 @@ class ReferenceInn(object):
             for thread in threads:
                 thread.join()
 
-    def start_multiprocessing(self, retry_queue: Queue, not_parsed_data: List[dict], fts_results: QueryResult,
+    def start_multiprocessing(self, retry_queue: Queue, not_parsed_data: List[dict], fts_results: dict,
                               start_time: str, semaphore: Semaphore, parsed_data) -> None:
         """
         Starting processing using a multithreading.
