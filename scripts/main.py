@@ -117,7 +117,7 @@ class ReferenceInn(object):
         """
         logger.info(f"The processing and filling of data into the dictionary has begun. Data is {sentence}",
                     pid=current_thread().ident)
-        data["sum_count_inn"] = sum_count_inn
+        data["sum_count_inn"] = data["sum_count_inn"]
         self.join_fts(fts, data, inn, inn_count, num_inn_in_fts, translated)
         data['company_name_rus'] = translated
         data["company_inn_max_rank"] = data["company_inn_max_rank"]
@@ -211,7 +211,7 @@ class ReferenceInn(object):
         Join FTS for checking INN.
         """
         data["request_to_yandex"] = data["request_to_yandex"]
-        data['company_inn_count'] = inn_count
+        data['company_inn_count'] = data["company_inn_count"]
         data["is_fts_found"] = False
         data["fts_company_name"] = None
         if inn in fts:
