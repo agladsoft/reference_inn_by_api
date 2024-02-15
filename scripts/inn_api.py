@@ -111,11 +111,10 @@ class SearchEngineParser(LegalEntitiesParser):
             message = message.format(index, error_code.text, value, code)
             prefix: str = PREFIX_TEMPLATE.get(code, "необработанная_ошибка_на_строке_")
             self.log_error(prefix + str(index), message)
+            self.errors = message
             if code == '200':
-                self.errors = message
                 raise AssertionError(message)
             elif code == '110' or code != '15':
-                self.errors = message
                 raise MyError(message, value, index)
 
     def parse_xml(self, response: Response, index: int, value: str) -> Tuple[ElemTree.Element, int, int]:

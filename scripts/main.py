@@ -206,10 +206,10 @@ class ReferenceInn(object):
         else:
             cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", self.conn)
             if api_inn := cache_name_inn.get_company_name_by_inn(translated, index):
-                self.telegram['errors'].append(cache_name_inn.errors)
                 self.parse_all_found_inn(fts, api_inn, cache_inn, sentence, translated, data, index, num_inn_in_fts,
                                          list_inn_in_fts)
             else:
+                self.telegram['errors'].append(cache_name_inn.errors)
                 self.get_all_data(fts, cache_inn, data, None, sentence, index, num_inn_in_fts, list_inn_in_fts,
                                   translated, inn_count=0, sum_count_inn=0)
         self.write_existing_inn_from_fts(index, data, list_inn_in_fts, num_inn_in_fts)
@@ -394,6 +394,7 @@ class ReferenceInn(object):
         Csv data representation in json.
         """
         dataframe: Union[TextFileReader, DataFrame] = pd.read_csv(self.filename, dtype=str)
+        dataframe.dropna(inplace=True)
         self.telegram['all_company'] += len(dataframe)
         series: Series = dataframe.iloc[:, 0]
         dataframe = series.to_frame(name="company_name")
@@ -452,7 +453,7 @@ class ReferenceInn(object):
         errors = '\n'.join([i for i in self.telegram.get('errors') if i])
         message = (f"Всего обработано компаний в файле : {self.telegram.get('all_company')}.\n\n"
                    f"Количество компаний у которых значение company_name_unified не Null  : {self.telegram.get('company_name_unified')}\n\n"
-                   f"Количество компаний у которых значение company_name_unified null : {not_unified}\n\n"
+                   f"Количество компаний у которых значение company_name_unified Null : {not_unified}\n\n"
                    f"Количество компаний у которых значение is_fts_found Null : {self.telegram.get('is_fts_found')}\n\n"
                    f"Ошибки которые возникли при обработке данных {errors}")
 
