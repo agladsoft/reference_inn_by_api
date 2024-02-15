@@ -205,8 +205,8 @@ class ReferenceInn(object):
                               translated, enforce_get_company=True)
         else:
             cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", self.conn)
-            self.telegram['errors'].append(cache_name_inn.errors)
             if api_inn := cache_name_inn.get_company_name_by_inn(translated, index):
+                self.telegram['errors'].append(cache_name_inn.errors)
                 self.parse_all_found_inn(fts, api_inn, cache_inn, sentence, translated, data, index, num_inn_in_fts,
                                          list_inn_in_fts)
             else:
@@ -449,11 +449,12 @@ class ReferenceInn(object):
 
     def send_message(self):
         not_unified = self.telegram.get("all_company") - self.telegram.get("company_name_unified")
-        message = (f'Всего обработано компаний в файле : {self.telegram.get("all_company")}.\n\n'
-                   f'Компании с унифицированными названиями : {self.telegram.get("company_name_unified")}\n\n'
-                   f'Компании с не унифицированными названиями : {not_unified}\n\n'
-                   f'Количество компаний у которых значение is_fts_found Null : {self.telegram.get("is_fts_found")}\n\n'
-                   f'Ошибки которые возникли при обработке данных {self.telegram.get("errors")}')
+        errors = '\n'.join([i for i in self.telegram.get('errors') if i])
+        message = (f"Всего обработано компаний в файле : {self.telegram.get('all_company')}.\n\n"
+                   f"Количество компаний у которых значение company_name_unified не Null  : {self.telegram.get('company_name_unified')}\n\n"
+                   f"Количество компаний у которых значение company_name_unified null : {not_unified}\n\n"
+                   f"Количество компаний у которых значение is_fts_found Null : {self.telegram.get('is_fts_found')}\n\n"
+                   f"Ошибки которые возникли при обработке данных {errors}")
 
         telegram(message)
 
