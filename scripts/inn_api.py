@@ -48,6 +48,7 @@ class SearchEngineParser(LegalEntitiesParser):
         self.table_name: str = table_name
         self.conn: sqlite3.Connection = conn
         self.cur: sqlite3.Cursor = self.load_cache()
+        self.errors = None
 
     def load_cache(self) -> sqlite3.Cursor:
         """
@@ -111,10 +112,10 @@ class SearchEngineParser(LegalEntitiesParser):
             prefix: str = PREFIX_TEMPLATE.get(code, "необработанная_ошибка_на_строке_")
             self.log_error(prefix + str(index), message)
             if code == '200':
-                telegram(message)
+                self.errors = message
                 raise AssertionError(message)
             elif code == '110' or code != '15':
-                telegram(message)
+                self.errors = message
                 raise MyError(message, value, index)
 
     def parse_xml(self, response: Response, index: int, value: str) -> Tuple[ElemTree.Element, int, int]:
