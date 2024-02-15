@@ -16,7 +16,6 @@ from csv import DictWriter
 from fuzzywuzzy import fuzz
 from requests import Response
 from sqlite3 import Connection
-from notifiers import get_notifier
 from notifiers.core import Provider
 from pandas import DataFrame, Series
 from clickhouse_connect import get_client
@@ -36,6 +35,7 @@ class ReferenceInn(object):
         self.filename: str = filename
         self.directory = directory
         self.lock: Lock = Lock()
+        self.telegram: Dict[str, int] = {'company_name_unified': 0, 'is_fts_found': 0, 'all_company': 0}
 
     @staticmethod
     def connect_to_db() -> Tuple[Client, dict]:
@@ -60,6 +60,7 @@ class ReferenceInn(object):
             return client, {**fts_recipients_inn, **fts_senders_inn}
         except Exception as ex_connect:
             logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
+            telegram(f'Отсутствует подключение к базе данных при получение данных из таблица fts')
             print("error_connect_db", file=sys.stderr)
             sys.exit(1)
 
@@ -296,10 +297,22 @@ class ReferenceInn(object):
             self.to_csv(output_file_path, data, 'w')
         logger.info(f"Data was written successfully to the file. Index is {index}", pid=current_thread().ident)
 
+    def count_to_telegram(self, data: Dict[str, str]) -> None:
+        """
+        Count company_unified,is_fts_found
+        """
+        company_name_unified = data.get('company_name_unified')
+        is_fts_found = data.get('is_fts_found')
+        if company_name_unified:
+            self.telegram['company_name_unified'] += 1
+        if is_fts_found is None:
+            self.telegram['is_fts_found'] += 1
+
     def write_to_json(self, index: int, data: dict) -> None:
         """
         Writing data to json.
         """
+        self.count_to_telegram(data)
         basename: str = os.path.basename(self.filename)
         output_file_path: str = os.path.join(self.directory, f'{basename}_{index}.json')
         with open(f"{output_file_path}", 'w', encoding='utf-8') as f:
@@ -380,6 +393,7 @@ class ReferenceInn(object):
         Csv data representation in json.
         """
         dataframe: Union[TextFileReader, DataFrame] = pd.read_csv(self.filename, dtype=str)
+        self.telegram['all_company'] += len(dataframe)
         series: Series = dataframe.iloc[:, 0]
         dataframe = series.to_frame(name="company_name")
         dataframe = dataframe.replace({np.nan: None})
@@ -395,14 +409,11 @@ class ReferenceInn(object):
             response_balance: Response = requests.get(f"https://xmlriver.com/api/get_balance/yandex/"
                                                       f"?user={USER_XML_RIVER}&key={KEY_XML_RIVER}")
             response_balance.raise_for_status()
-            telegram: Provider = get_notifier('telegram')
             balance: float = float(response_balance.text)
             if 200.0 > balance >= 100.0:
-                telegram.notify(token=TOKEN_TELEGRAM, chat_id=CHAT_ID,
-                                message=f"Баланс в Яндекс кошельке сейчас составляет {balance} рублей.")
+                telegram(message=f"Баланс в Яндекс кошельке сейчас составляет {balance} рублей.")
             elif balance < 100.0:
-                telegram.notify(token=TOKEN_TELEGRAM, chat_id=CHAT_ID,
-                                message='Баланс в Яндекс кошельке меньше 100 рублей. Пополните, пожалуйста, счет.')
+                telegram(message='Баланс в Яндекс кошельке меньше 100 рублей. Пополните, пожалуйста, счет.')
                 logger.error("There is not enough money to process all the lines. Please top up your account")
                 logger_stream.error("не_хватает_денег_для_обработки_файла")
                 sys.exit(1)
@@ -435,6 +446,16 @@ class ReferenceInn(object):
             for i, dict_data in enumerate(not_parsed_data, 2):
                 executor.submit(self.parse_data, not_parsed_data, i, dict_data, fts_results, start_time, retry_queue)
 
+    def send_message(self):
+        not_unified = self.telegram.get("all_company") - self.telegram.get("company_name_unified")
+        message = (f'Всего обработано компаний в файле : {self.telegram.get("all_company")}.\n\n'
+                   f'Компании с унифицированными названиями : {self.telegram.get("company_name_unified")}\n\n'
+                   f'Компании с не унифицированными названиями : {not_unified}\n\n'
+                   f'Количество компаний у которых значение is_fts_found Null : {self.telegram.get("is_fts_found")}')
+
+
+        telegram(message)
+
     def main(self):
         """
         The main method that runs the code.
@@ -462,6 +483,7 @@ class ReferenceInn(object):
         logger.info("Push data to db")
         self.push_data_to_db(start_time)
         logger.info("The script has completed its work")
+        self.send_message()
 
 
 if __name__ == "__main__":

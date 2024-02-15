@@ -1,5 +1,6 @@
 import os
 import logging
+import requests
 from dotenv import load_dotenv
 
 COUNT_THREADS: int = 4
@@ -55,14 +56,12 @@ if logger.hasHandlers():
 logger = CustomAdapter(logger, {"pid": None})
 logger.setLevel(logging.INFO)
 
-
 console_out: logging.StreamHandler = logging.StreamHandler()
 logger_stream: logging.getLogger = logging.getLogger("stream")
 if logger_stream.hasHandlers():
     logger_stream.handlers.clear()
 logger_stream.addHandler(console_out)
 logger_stream.setLevel(logging.INFO)
-
 
 load_dotenv()
 
@@ -76,3 +75,18 @@ def get_my_env_var(var_name: str) -> str:
 
 class MissingEnvironmentVariable(Exception):
     pass
+
+
+def telegram(message):
+    # teg = get_notifier('telegram')
+    # teg.notify(token=TOKEN, chat_id=CHAT_ID, message=message)
+    chat_id = get_my_env_var('CHAT_ID')
+    token = get_my_env_var('TOKEN')
+    topic = get_my_env_var('TOPIC')
+    message_id = get_my_env_var('ID')
+    # teg.notify(token=get_my_env_var('TOKEN'), chat_id=get_my_env_var('CHAT_ID'), message=message)
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    # params = {"chat_id": f"{chat_id}/{topic}", "text": message,
+    #           'reply_to_message_id': message_id}  # Добавляем /2 для указания второго подканала
+    params = {"chat_id": f"{chat_id}", "text": message}
+    response = requests.get(url, params=params)

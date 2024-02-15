@@ -8,7 +8,7 @@ from typing import Union, Tuple
 from threading import current_thread
 from requests_html import HTMLSession
 import xml.etree.ElementTree as ElemTree
-from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE
+from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE, telegram
 
 
 class MyError(Exception):
@@ -111,8 +111,10 @@ class SearchEngineParser(LegalEntitiesParser):
             prefix: str = PREFIX_TEMPLATE.get(code, "необработанная_ошибка_на_строке_")
             self.log_error(prefix + str(index), message)
             if code == '200':
+                telegram(message)
                 raise AssertionError(message)
             elif code == '110' or code != '15':
+                telegram(message)
                 raise MyError(message, value, index)
 
     def parse_xml(self, response: Response, index: int, value: str) -> Tuple[ElemTree.Element, int, int]:
