@@ -35,7 +35,7 @@ class ReferenceInn(object):
         self.filename: str = filename
         self.directory = directory
         self.lock: Lock = Lock()
-        self.telegram: Dict[str, int] = {'company_name_unified': 0, 'is_fts_found': 0, 'all_company': 0, 'errors': []}
+        self.telegram: Dict[str, Optional[int,str]] = {'company_name_unified': 0, 'is_fts_found': 0, 'all_company': 0, 'errors': []}
 
     @staticmethod
     def connect_to_db() -> Tuple[Client, dict]:

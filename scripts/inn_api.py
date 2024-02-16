@@ -8,7 +8,7 @@ from typing import Union, Tuple
 from threading import current_thread
 from requests_html import HTMLSession
 import xml.etree.ElementTree as ElemTree
-from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE, telegram
+from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE
 
 
 class MyError(Exception):
