@@ -452,7 +452,7 @@ class ReferenceInn(object):
         not_unified = self.telegram.get("all_company") - self.telegram.get("company_name_unified")
         errors = '\n'.join([i for i in self.telegram.get('errors') if i])
         message = (f"Завершена обработка файла: {self.filename.split('/')[-1]}.\n\n"
-                   f"Кол-во строк в файле : {self.telegram.get('all_company') + 1}.\n\n"
+                   f"Кол-во строк в файле : {self.telegram.get('all_company')}.\n\n"
                    f"Кол-во строк в базе: {self.telegram.get('all_company')}.\n\n"
                    f"Кол-во строк, где значение company_name_unified = НЕ Null : {self.telegram.get('company_name_unified')}\n\n"
                    f"Кол-во строк, где значение company_name_unified = Null : {not_unified}\n\n"
