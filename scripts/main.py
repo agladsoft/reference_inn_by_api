@@ -76,7 +76,7 @@ class ReferenceInn(object):
                                                  f'{start_time_script}_{basename}')
             df: DataFrame = pd.read_csv(output_file_path, dtype={"company_inn": str, "confidence_rate": "Int64"})
             df = df.replace({np.nan: None, "NaT": None})
-            # client.insert_df("reference_inn_all", df, database="default")
+            client.insert_df("reference_inn_all", df, database="default")
         except Exception as ex:
             logger.error(f"Error is {ex}")
 
