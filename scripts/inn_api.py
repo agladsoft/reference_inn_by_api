@@ -112,9 +112,7 @@ class SearchEngineParser(LegalEntitiesParser):
             message = message.format(index, error_code.text, value, code)
             prefix: str = PREFIX_TEMPLATE.get(code, "необработанная_ошибка_на_строке_")
             self.log_error(prefix + str(index), message)
-            telegram(message)
             ERRORS.append(message)
-            # self.errors = message
 
             if code == '200':
                 raise AssertionError(message)
