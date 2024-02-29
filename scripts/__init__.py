@@ -40,6 +40,7 @@ PREFIX_TEMPLATE: dict = {
     '15': "не_найдено_результатов_"
 }
 
+ERRORS = []
 
 class CustomAdapter(logging.LoggerAdapter):
     def process(self, msg, kwargs):
@@ -86,7 +87,7 @@ def telegram(message):
     message_id = get_my_env_var('ID')
     # teg.notify(token=get_my_env_var('TOKEN'), chat_id=get_my_env_var('CHAT_ID'), message=message)
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    params = {"chat_id": f"{chat_id}/{topic}", "text": message,
-              'reply_to_message_id': message_id}  # Добавляем /2 для указания второго подканала
-    # params = {"chat_id": f"{chat_id}", "text": message}
+    # params = {"chat_id": f"{chat_id}/{topic}", "text": message,
+    #           'reply_to_message_id': message_id}  # Добавляем /2 для указания второго подканала
+    params = {"chat_id": f"{chat_id}", "text": message}
     response = requests.get(url, params=params)

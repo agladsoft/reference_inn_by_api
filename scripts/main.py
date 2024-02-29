@@ -28,6 +28,7 @@ from clickhouse_connect.driver.query import QueryResult
 from deep_translator import GoogleTranslator, exceptions
 from inn_api import LegalEntitiesParser, SearchEngineParser
 
+errors = []
 
 class ReferenceInn(object):
     def __init__(self, filename, directory):
@@ -76,7 +77,7 @@ class ReferenceInn(object):
                                                  f'{start_time_script}_{basename}')
             df: DataFrame = pd.read_csv(output_file_path, dtype={"company_inn": str, "confidence_rate": "Int64"})
             df = df.replace({np.nan: None, "NaT": None})
-            client.insert_df("reference_inn_all", df, database="default")
+            # client.insert_df("reference_inn_all", df, database="default")
         except Exception as ex:
             logger.error(f"Error is {ex}")
 
@@ -373,6 +374,7 @@ class ReferenceInn(object):
             self.write_to_csv(index, data)
             self.write_to_json(index, data)
         except Exception as ex_full:
+            telegram(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}')
             logger.error(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}',
                          pid=current_thread().ident)
             self.add_index_in_queue(not_parsed_data, retry_queue, is_queue, sentence, index)
@@ -450,7 +452,7 @@ class ReferenceInn(object):
 
     def send_message(self):
         not_unified = self.telegram.get("all_company") - self.telegram.get("company_name_unified")
-        errors = '\n'.join([i for i in self.telegram.get('errors') if i])
+        errors = '\n'.join([i for i in ERRORS if i])
         message = (f"Завершена обработка файла: {self.filename.split('/')[-1]}.\n\n"
                    f"Кол-во строк в файле : {self.telegram.get('all_company')}.\n\n"
                    f"Кол-во строк в базе: {self.telegram.get('all_company')}.\n\n"
