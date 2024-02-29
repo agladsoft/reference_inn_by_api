@@ -210,7 +210,7 @@ class ReferenceInn(object):
                 self.parse_all_found_inn(fts, api_inn, cache_inn, sentence, translated, data, index, num_inn_in_fts,
                                          list_inn_in_fts)
             else:
-                self.telegram['errors'].append(cache_name_inn.errors)
+                # self.telegram['errors'].append(cache_name_inn.errors)
                 self.get_all_data(fts, cache_inn, data, None, sentence, index, num_inn_in_fts, list_inn_in_fts,
                                   translated, inn_count=0, sum_count_inn=0)
         self.write_existing_inn_from_fts(index, data, list_inn_in_fts, num_inn_in_fts)
@@ -374,7 +374,7 @@ class ReferenceInn(object):
             self.write_to_csv(index, data)
             self.write_to_json(index, data)
         except Exception as ex_full:
-            telegram(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}')
+            # telegram(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}')
             logger.error(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}',
                          pid=current_thread().ident)
             self.add_index_in_queue(not_parsed_data, retry_queue, is_queue, sentence, index)
