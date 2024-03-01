@@ -36,6 +36,7 @@ class ReferenceInn(object):
         self.filename: str = filename
         self.directory = directory
         self.lock: Lock = Lock()
+        self.queue = False
         self.telegram: Dict[str, Optional[int,str]] = {'company_name_unified': 0, 'is_fts_found': 0, 'all_company': 0, 'errors': []}
 
     @staticmethod
@@ -205,12 +206,11 @@ class ReferenceInn(object):
             self.get_all_data(fts, cache_inn, data, list_inn[0], sentence, index, num_inn_in_fts, list_inn_in_fts,
                               translated, enforce_get_company=True)
         else:
-            cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", self.conn)
+            cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", self.conn, self.queue)
             if api_inn := cache_name_inn.get_company_name_by_inn(translated, index):
                 self.parse_all_found_inn(fts, api_inn, cache_inn, sentence, translated, data, index, num_inn_in_fts,
                                          list_inn_in_fts)
             else:
-                # self.telegram['errors'].append(cache_name_inn.errors)
                 self.get_all_data(fts, cache_inn, data, None, sentence, index, num_inn_in_fts, list_inn_in_fts,
                                   translated, inn_count=0, sum_count_inn=0)
         self.write_existing_inn_from_fts(index, data, list_inn_in_fts, num_inn_in_fts)
@@ -486,6 +486,7 @@ class ReferenceInn(object):
         self.start_multiprocessing(retry_queue, not_parsed_data, fts_results, start_time)
         logger.info(f"All rows have been processed. Is the queue empty? {retry_queue.empty()}",
                     pid=current_thread().ident)
+        self.queue = True
         self.start_multiprocessing_with_queue(retry_queue, not_parsed_data, fts_results, start_time)
         logger.info("Push data to db")
         self.push_data_to_db(start_time)

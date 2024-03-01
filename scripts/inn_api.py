@@ -45,11 +45,11 @@ class LegalEntitiesParser(object):
 
 class SearchEngineParser(LegalEntitiesParser):
 
-    def __init__(self, table_name, conn):
+    def __init__(self, table_name, conn, queue):
         self.table_name: str = table_name
         self.conn: sqlite3.Connection = conn
         self.cur: sqlite3.Cursor = self.load_cache()
-        self.errors = None
+        self.queue = queue
 
     def load_cache(self) -> sqlite3.Cursor:
         """
@@ -112,8 +112,8 @@ class SearchEngineParser(LegalEntitiesParser):
             message = message.format(index, error_code.text, value, code)
             prefix: str = PREFIX_TEMPLATE.get(code, "необработанная_ошибка_на_строке_")
             self.log_error(prefix + str(index), message)
-            ERRORS.append(message)
-
+            if self.queue:
+                ERRORS.append(message)
             if code == '200':
                 raise AssertionError(message)
             elif code == '110' or code != '15':
