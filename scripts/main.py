@@ -451,6 +451,7 @@ class ReferenceInn(object):
                 executor.submit(self.parse_data, not_parsed_data, i, dict_data, fts_results, start_time, retry_queue)
 
     def send_message(self):
+        logger.info('Сотавление сообщения для отправки ботом')
         not_unified = self.telegram.get("all_company") - self.telegram.get("company_name_unified")
         errors = '\n\n'.join([i for i in list(set(ERRORS)) if i])
         message = (f"Завершена обработка файла: {self.filename.split('/')[-1]}.\n\n"
@@ -459,7 +460,7 @@ class ReferenceInn(object):
                    f"Кол-во строк, где значение company_name_unified = НЕ Null : {self.telegram.get('company_name_unified')}\n\n"
                    f"Кол-во строк, где значение company_name_unified = Null : {not_unified}\n\n"
                    f"Кол-во строк, где значение is_fts_found = Null : {self.telegram.get('is_fts_found')}\n\n"
-                   f"Ошибки при обработке данных :{errors}")
+                   f"Ошибки при обработке данных :\n{errors}")
 
         telegram(message)
 

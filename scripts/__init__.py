@@ -1,5 +1,7 @@
 import os
 import logging
+import time
+
 import requests
 from dotenv import load_dotenv
 
@@ -41,6 +43,7 @@ PREFIX_TEMPLATE: dict = {
 }
 
 ERRORS = []
+
 
 class CustomAdapter(logging.LoggerAdapter):
     def process(self, msg, kwargs):
@@ -89,5 +92,18 @@ def telegram(message):
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     # params = {"chat_id": f"{chat_id}/{topic}", "text": message,
     #           'reply_to_message_id': message_id}  # Добавляем /2 для указания второго подканала
-    params = {"chat_id": f"{chat_id}", "text": message}
-    response = requests.get(url, params=params)
+    logger.info("Отправка сообщения в телеграмм")
+    if len(message) < 4095:
+        # params = {"chat_id": f"{chat_id}", "text": message}
+        params = {"chat_id": f"{chat_id}/{topic}", "text": message,
+                  'reply_to_message_id': message_id}  # Добавляем /2 для указания второго подканала
+        response = requests.get(url, params=params)
+    else:
+        for x in range(0, len(message), 4095):
+            m = message[x:x + 4095]
+            # params = {"chat_id": f"{chat_id}", "text": m}
+            params = {"chat_id": f"{chat_id}/{topic}", "text": m,
+                      'reply_to_message_id': message_id}  # Добавляем /2 для указания второго подканала
+            response = requests.get(url, params=params)
+            time.sleep(2)
+    logger.info("Отправка сообщения в телеграмм")
