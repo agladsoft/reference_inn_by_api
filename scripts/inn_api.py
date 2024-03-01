@@ -144,7 +144,7 @@ class SearchEngineParser(LegalEntitiesParser):
         logger.info(f"Before request. Data is {value}", pid=current_thread().ident)
         try:
             r: Response = session.get(f"https://xmlriver.com/search_yandex/xml?user={USER_XML_RIVER}"
-                                      f"&key={KEY_XML_RIVER}&query={value} ИНН", timeout=120)
+                                      f"&key=&query={value} ИНН", timeout=120)
         except Exception as e:
             logger.error(f"Run time out. Data is {value}", pid=current_thread().ident)
             raise MyError(f"Run time out. Index is {index}. Exception is {e}. Value - {value}", value, index) from e
