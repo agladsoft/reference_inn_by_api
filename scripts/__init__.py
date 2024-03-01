@@ -99,11 +99,12 @@ def telegram(message):
                   'reply_to_message_id': message_id}  # Добавляем /2 для указания второго подканала
         response = requests.get(url, params=params)
     else:
-        for x in range(0, len(message), 4095):
+        for n, x in enumerate(range(0, len(message), 4095), 1):
             m = message[x:x + 4095]
             # params = {"chat_id": f"{chat_id}", "text": m}
             params = {"chat_id": f"{chat_id}/{topic}", "text": m,
                       'reply_to_message_id': message_id}  # Добавляем /2 для указания второго подканала
             response = requests.get(url, params=params)
+            logger.info(f'Отправка сообщения #{n}, Статус отправки {response.status_code}')
             time.sleep(2)
-    logger.info("Отправка сообщения в телеграмм")
+    # logger.info("Отправка сообщения в телеграмм")
