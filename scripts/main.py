@@ -374,6 +374,8 @@ class ReferenceInn(object):
             self.write_to_csv(index, data)
             self.write_to_json(index, data)
         except Exception as ex_full:
+            if self.queue:
+                ERRORS.append(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}')
             # telegram(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}')
             logger.error(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}',
                          pid=current_thread().ident)
