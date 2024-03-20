@@ -1,9 +1,7 @@
 import re
 import sys
 import json
-import time
 import sqlite3
-import requests
 import datetime
 import contextlib
 import numpy as np
@@ -16,7 +14,6 @@ from csv import DictWriter
 from fuzzywuzzy import fuzz
 from requests import Response
 from sqlite3 import Connection
-from notifiers.core import Provider
 from pandas import DataFrame, Series
 from clickhouse_connect import get_client
 from threading import current_thread, Lock
@@ -30,6 +27,7 @@ from inn_api import LegalEntitiesParser, SearchEngineParser
 
 errors = []
 
+
 class ReferenceInn(object):
     def __init__(self, filename, directory):
         self.conn: Optional[Connection] = None
@@ -37,7 +35,12 @@ class ReferenceInn(object):
         self.directory = directory
         self.lock: Lock = Lock()
         self.queue = False
-        self.telegram: Dict[str, Optional[int,str]] = {'company_name_unified': 0, 'is_fts_found': 0, 'all_company': 0, 'errors': []}
+        self.telegram: Dict[str, Optional[int, str]] = {
+            'company_name_unified': 0,
+            'is_fts_found': 0,
+            'all_company': 0,
+            'errors': []
+        }
 
     @staticmethod
     def connect_to_db() -> Tuple[Client, dict]:
@@ -62,7 +65,7 @@ class ReferenceInn(object):
             return client, {**fts_recipients_inn, **fts_senders_inn}
         except Exception as ex_connect:
             logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
-            telegram(f'Отсутствует подключение к базе данных при получение данных из таблица fts')
+            telegram('Отсутствует подключение к базе данных при получение данных из таблица fts')
             print("error_connect_db", file=sys.stderr)
             sys.exit(1)
 
@@ -273,7 +276,7 @@ class ReferenceInn(object):
         data['company_inn_count'] = inn_count
         data["is_fts_found"] = False
         data["fts_company_name"] = None
-        if inn in fts:
+        if inn in fts and inn is not None:
             data["is_fts_found"] = True
             num_inn_in_fts["num_inn_in_fts"] += 1
             data["fts_company_name"] = fts[inn]
@@ -376,7 +379,6 @@ class ReferenceInn(object):
         except Exception as ex_full:
             if self.queue:
                 ERRORS.append(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}')
-            # telegram(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}')
             logger.error(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}',
                          pid=current_thread().ident)
             self.add_index_in_queue(not_parsed_data, retry_queue, is_queue, sentence, index)
@@ -453,16 +455,20 @@ class ReferenceInn(object):
                 executor.submit(self.parse_data, not_parsed_data, i, dict_data, fts_results, start_time, retry_queue)
 
     def send_message(self):
-        logger.info('Сотавление сообщения для отправки ботом')
+        """
+        Sending a message to the telegram.
+        """
+        logger.info('Составление сообщения для отправки ботом')
         not_unified = self.telegram.get("all_company") - self.telegram.get("company_name_unified")
-        errors = '\n\n'.join([i for i in list(set(ERRORS)) if i])
+        errors_ = '\n\n'.join([i for i in list(set(ERRORS)) if i])
         message = (f"Завершена обработка файла: {self.filename.split('/')[-1]}.\n\n"
                    f"Кол-во строк в файле : {self.telegram.get('all_company')}.\n\n"
                    f"Кол-во строк в базе: {self.telegram.get('all_company')}.\n\n"
-                   f"Кол-во строк, где значение company_name_unified = НЕ Null : {self.telegram.get('company_name_unified')}\n\n"
+                   f"Кол-во строк, где значение company_name_unified = НЕ Null : "
+                   f"{self.telegram.get('company_name_unified')}\n\n"
                    f"Кол-во строк, где значение company_name_unified = Null : {not_unified}\n\n"
                    f"Кол-во строк, где значение is_fts_found = Null : {self.telegram.get('is_fts_found')}\n\n"
-                   f"Ошибки при обработке данных :\n{errors}")
+                   f"Ошибки при обработке данных :\n{errors_}")
 
         telegram(message)
 
