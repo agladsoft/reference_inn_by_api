@@ -31,13 +31,12 @@ class LegalEntitiesParser(object):
             "inn": inn
         }
         try:
-            response: Response = requests.post(f"http://service_inn:8003", json=data)
+            response: Response = requests.post("http://service_inn:8003", json=data)
             response.raise_for_status()
             data = response.json()
-            if list_dadata := data[0]:
-                return list_dadata[0].get('value'), data[1]
-            else:
-                return None, data[1]
+            if isinstance(data, str):
+                return None, False
+            return data[0][0].get('value') if data[0] else None, data[1]
         except requests.exceptions.RequestException as e:
             logger.error(f"An error occurred during the API request: {str(e)}")
             return None, None
