@@ -6,7 +6,6 @@ import validate_inn
 from requests import Response
 from typing import Union, Tuple
 from threading import current_thread
-from requests_html import HTMLSession
 import xml.etree.ElementTree as ElemTree
 from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE, telegram, \
     ERRORS
@@ -93,8 +92,8 @@ class SearchEngineParser(LegalEntitiesParser):
         """
         Parsing the html page of the search engine with the found queries.
         """
-        value: str = myroot[0][index_page][0][results][1][3][0].text
-        title: str = myroot[0][index_page][0][results][1][1].text
+        value: str = myroot[1][index_page][0][results][1][3][0].text
+        title: str = myroot[1][index_page][0][results][1][1].text
         inn_text: list = re.findall(r"\d+", value)
         inn_title: list = re.findall(r"\d+", title)
         self.get_inn_from_site(dict_inn, inn_text, count_inn)
@@ -122,28 +121,27 @@ class SearchEngineParser(LegalEntitiesParser):
         """
         Parsing xml.
         """
-        xml_code: str = response.html.html
+        xml_code: str = response.text
         myroot: ElemTree = ElemTree.fromstring(xml_code)
         self.get_code_error(myroot[0][0], index, value)
-        index_page: int = 2 if myroot[0][1].tag == 'correct' else 1
+        index_page: int = 1
         try:
-            last_range: int = int(myroot[0][index_page][0][0].attrib['last'])
+            last_range: int = int(myroot[1][index_page][0][0].attrib['last'])
         except IndexError as index_err:
             logger.warning(f"The request to Yandex has been corrected, so we are shifting the index. Index is {index}. "
                            f"Exception - {index_err}", pid=current_thread().ident)
             index_page += + 1
-            last_range = int(myroot[0][index_page][0][0].attrib['last'])
+            last_range = int(myroot[1][index_page][0][0].attrib['last'])
         return myroot, index_page, last_range
 
     def get_inn_from_search_engine(self, value: str, index: int) -> dict:
         """
         Looking for the INN in the search engine, and then we parse through the sites.
         """
-        session: HTMLSession = HTMLSession()
         logger.info(f"Before request. Data is {value}", pid=current_thread().ident)
         try:
-            r: Response = session.get(f"https://xmlriver.com/search_yandex/xml?user={USER_XML_RIVER}"
-                                      f"&key={KEY_XML_RIVER}&query={value} ИНН", timeout=120)
+            r: Response = requests.get(f"https://xmlriver.com/search_yandex/xml?user={USER_XML_RIVER}"
+                                       f"&key={KEY_XML_RIVER}&query={value} ИНН", timeout=120)
         except Exception as e:
             logger.error(f"Run time out. Data is {value}", pid=current_thread().ident)
             raise MyError(f"Run time out. Index is {index}. Exception is {e}. Value - {value}", value, index) from e
