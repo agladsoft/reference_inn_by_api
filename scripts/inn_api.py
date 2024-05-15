@@ -7,8 +7,7 @@ from requests import Response
 from typing import Union, Tuple
 from threading import current_thread
 import xml.etree.ElementTree as ElemTree
-from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE, telegram, \
-    ERRORS
+from __init__ import logger, logger_stream, USER_XML_RIVER, KEY_XML_RIVER, MESSAGE_TEMPLATE, PREFIX_TEMPLATE, ERRORS
 
 
 class MyError(Exception):
@@ -87,18 +86,6 @@ class SearchEngineParser(LegalEntitiesParser):
                 inn: str = validate_inn.validate(item_inn)
                 dict_inn[inn] = dict_inn[inn] + 1 if inn in dict_inn else count_inn
 
-    def get_inn_from_html(self, myroot: ElemTree, index_page: int, results: int, dict_inn: dict, count_inn: int) \
-            -> None:
-        """
-        Parsing the html page of the search engine with the found queries.
-        """
-        value: str = myroot[index_page][0][results][1][3][0].text
-        title: str = myroot[index_page][0][results][1][1].text
-        inn_text: list = re.findall(r"\d+", value)
-        inn_title: list = re.findall(r"\d+", title)
-        self.get_inn_from_site(dict_inn, inn_text, count_inn)
-        self.get_inn_from_site(dict_inn, inn_title, count_inn)
-
     def get_code_error(self, error_code: ElemTree, index: int, value: str) -> None:
         """
         Getting error codes from xml_river.
@@ -117,24 +104,22 @@ class SearchEngineParser(LegalEntitiesParser):
             elif code == '110' or code != '15':
                 raise MyError(message, value, index)
 
-    def parse_xml(self, response: Response, index: int, value: str) -> Tuple[ElemTree.Element, int, int]:
+    def parse_xml(self, response: Response, index: int, value: str, dict_inn: dict, count_inn: int):
         """
         Parsing xml.
         """
-        xml_code: str = response.text
-        myroot: ElemTree = ElemTree.fromstring(xml_code)
-        self.get_code_error(myroot[0][0], index, value)
-        try:
-            index_ = 1
-            index_page: int = 3 if myroot[index_][1].tag == 'correct' else 1
-            last_range: int = int(myroot[index_][index_page][0][0].attrib['last'])
-        except IndexError as index_err:
-            logger.warning(f"The request to Yandex has been corrected, so we are shifting the index. Index is {index}. "
-                           f"Exception - {index_err}", pid=current_thread().ident)
-            index_ = 0
-            index_page: int = 3 if myroot[index_][1].tag == 'correct' else 1
-            last_range = int(myroot[index_][index_page][0][0].attrib['last'])
-        return myroot[index_], index_page, last_range
+        # Parse the XML data
+        root = ElemTree.fromstring(response.text)
+        self.get_code_error(root[0][0], index, value)
+
+        # Find all title and passage elements
+        for doc in root.findall(".//doc"):
+            title = doc.find('title').text
+            passage = doc.find('.//passage').text if doc.find('.//passage') is not None else ''
+            inn_text: list = re.findall(r"\d+", passage)
+            inn_title: list = re.findall(r"\d+", title)
+            self.get_inn_from_site(dict_inn, inn_text, count_inn)
+            self.get_inn_from_site(dict_inn, inn_title, count_inn)
 
     def get_inn_from_search_engine(self, value: str, index: int) -> dict:
         """
@@ -148,17 +133,15 @@ class SearchEngineParser(LegalEntitiesParser):
             logger.error(f"Run time out. Data is {value}", pid=current_thread().ident)
             raise MyError(f"Run time out. Index is {index}. Exception is {e}. Value - {value}", value, index) from e
         logger.info(f"After request. Data is {value}", pid=current_thread().ident)
-        myroot, index_page, last_range = self.parse_xml(r, index, value)
         dict_inn: dict = {}
         count_inn: int = 1
-        for results in range(1, last_range):
-            try:
-                self.get_inn_from_html(myroot, index_page, results, dict_inn, count_inn)
-            except Exception as ex:
-                logger.warning(f"Description {value} not found in the Yandex. Index is {index}. Exception - {ex}",
-                               pid=current_thread().ident)
-                logger_stream.warning(f"Description {value} not found in the Yandex. Index is {index}. "
-                                      f"Exception - {ex}")
+        try:
+            self.parse_xml(r, index, value, dict_inn, count_inn)
+        except Exception as ex:
+            logger.warning(f"Description {value} not found in the Yandex. Index is {index}. Exception - {ex}",
+                           pid=current_thread().ident)
+            logger_stream.warning(f"Description {value} not found in the Yandex. Index is {index}. "
+                                  f"Exception - {ex}")
         logger.info(f"Dictionary with INN is {dict_inn}. Data is {value}", pid=current_thread().ident)
         return dict_inn
 
