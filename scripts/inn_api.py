@@ -124,7 +124,7 @@ class SearchEngineParser(LegalEntitiesParser):
         xml_code: str = response.text
         myroot: ElemTree = ElemTree.fromstring(xml_code)
         self.get_code_error(myroot[0][0], index, value)
-        index_page: int = 1
+        index_page: int = 3 if myroot[1][1].tag == 'correct' else 1
         try:
             last_range: int = int(myroot[1][index_page][0][0].attrib['last'])
         except IndexError as index_err:
