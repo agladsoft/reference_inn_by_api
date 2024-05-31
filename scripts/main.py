@@ -460,7 +460,7 @@ class ReferenceInn(object):
         """
         logger.info('Составление сообщения для отправки ботом')
         not_unified = self.telegram.get("all_company") - self.telegram.get("company_name_unified")
-        errors_ = '\n\n'.join([i for i in list(set(ERRORS)) if i])
+        errors_ = '\n\n'.join(set(ERRORS)) if self.telegram.get('is_fts_found') else ''
         message = (f"Завершена обработка файла: {self.filename.split('/')[-1]}.\n\n"
                    f"Кол-во строк в файле : {self.telegram.get('all_company')}.\n\n"
                    f"Кол-во строк в базе: {self.telegram.get('all_company')}.\n\n"
