@@ -5,6 +5,8 @@ import time
 import requests
 from dotenv import load_dotenv
 
+os.environ['XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS'] = '.'
+
 COUNT_THREADS: int = 4
 TOKEN_TELEGRAM: str = "6557326533:AAHy6ls9LhTVTGztix8PUSK7BUSaHVEojXc"
 CHAT_ID: str = "-4051876751"
@@ -85,7 +87,7 @@ def telegram(message):
     # teg = get_notifier('telegram')
     # teg.notify(token=TOKEN, chat_id=CHAT_ID, message=message)
     chat_id = get_my_env_var('CHAT_ID')
-    token = get_my_env_var('TOKEN')
+    token = get_my_env_var('TOKEN_TELEGRAM')
     topic = get_my_env_var('TOPIC')
     message_id = get_my_env_var('ID')
     # teg.notify(token=get_my_env_var('TOKEN'), chat_id=get_my_env_var('CHAT_ID'), message=message)
