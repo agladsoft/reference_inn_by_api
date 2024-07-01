@@ -148,11 +148,13 @@ class ReferenceInn(object):
         num_inn_in_fts["company_inn_max_rank"] += 1
         if not data["is_fts_found"] and not enforce_get_company:
             return
-        company_name, country, is_cache = manager.fetch_company_name(country, inn)
-        data["is_company_name_from_cache"] = is_cache
-        data["company_name_unified"] = company_name
-        data["country"] = country
-        self.compare_different_fuzz(company_name, translated, data)
+        generator_companies = manager.fetch_company_name(country, inn)
+        for company_name, country, is_cache in generator_companies:
+            if company_name is not None:
+                data["is_company_name_from_cache"] = is_cache
+                data["company_name_unified"] = company_name
+                data["country"] = country
+                self.compare_different_fuzz(company_name, translated, data)
         logger.info(f"Data was written successfully to the dictionary. Data is {sentence}", pid=current_thread().ident)
         self.write_to_csv(index, data)
         list_inn_in_fts.append(data.copy())
@@ -183,7 +185,7 @@ class ReferenceInn(object):
         """
         list_inn_in_fts: List[dict] = []
         manager = UnifiedCompaniesManager()
-        dict_taxpayer_ids, taxpayer_id, country = self.extract_taxpayer_id(sentence, manager)
+        dict_taxpayer_ids, taxpayer_id = self.extract_taxpayer_id(sentence, manager)
 
         translated: Optional[str] = self.get_translated_sentence(sentence)
         num_inn_in_fts: Dict[str, int] = {"num_inn_in_fts": 0, "company_inn_max_rank": 1}
@@ -204,18 +206,18 @@ class ReferenceInn(object):
         :param manager:
         :return:
         """
-        country: Optional[object] = None
+        country: Optional[List[object]] = []
         dict_taxpayer_ids: dict = {}
         all_digits = re.findall(r"\d+", sentence)
 
         for item_inn in all_digits:
-            if country := manager.get_valid_company(item_inn):
-                return dict_taxpayer_ids, item_inn, country
+            if country := list(manager.get_valid_company(item_inn)):
+                return dict_taxpayer_ids, item_inn
 
         # If no valid taxpayer ID found, use search engine
         search_engine = SearchEngineParser(country)
-        dict_taxpayer_ids, taxpayer_id, country = search_engine.get_taxpayer_id(sentence, 3)
-        return dict_taxpayer_ids, taxpayer_id, country
+        dict_taxpayer_ids, taxpayer_id = search_engine.get_taxpayer_id(sentence, 3)
+        return dict_taxpayer_ids, taxpayer_id
 
     def parse_all_found_inn(
             self,
@@ -341,8 +343,6 @@ class ReferenceInn(object):
             retry_queue.put(index)
         else:
             data_queue: dict = not_parsed_data[index - 2]
-            data_queue['original_file_name'] = os.path.basename(self.filename)
-            data_queue['original_file_parsed_on'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.write_to_csv(index, data_queue)
             self.write_to_json(index, data_queue)
 
@@ -420,11 +420,11 @@ class ReferenceInn(object):
             balance: float = float(response_balance.text)
             if 200.0 > balance >= 100.0:
                 telegram(message=f"Баланс в Яндекс кошельке сейчас составляет {balance} рублей.")
-            # elif balance < 100.0:
-            #     telegram(message='Баланс в Яндекс кошельке меньше 100 рублей. Пополните, пожалуйста, счет.')
-            #     logger.error("There is not enough money to process all the lines. Please top up your account")
-            #     logger_stream.error("не_хватает_денег_для_обработки_файла")
-            #     sys.exit(1)
+            elif balance < 100.0:
+                telegram(message='Баланс в Яндекс кошельке меньше 100 рублей. Пополните, пожалуйста, счет.')
+                logger.error("There is not enough money to process all the lines. Please top up your account")
+                logger_stream.error("не_хватает_денег_для_обработки_файла")
+                sys.exit(1)
         except requests.exceptions.RequestException as e:
             logger.error(f"An error occurred while receiving data from xmlriver. Exception is {e}")
             logger_stream.error("ошибка_при_получении_баланса_яндекса")

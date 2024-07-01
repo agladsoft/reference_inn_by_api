@@ -28,17 +28,18 @@ class UnifiedCompaniesManager:
         for unified_company in self.unified_companies:
             with contextlib.suppress(Exception):
                 if unified_company.is_valid(company_data):
-                    return unified_company
+                    yield unified_company
 
     @staticmethod
-    def fetch_company_name(company, taxpayer_id):
-        if rows := company.cur.execute(
-            f'SELECT * FROM "{company.table_name}" WHERE taxpayer_id=?',
-            (taxpayer_id,),
-        ).fetchall():
-            return rows[0][1], rows[0][2], True
-        else:
-            return company.get_company_by_taxpayer_id(taxpayer_id, 3), str(company), False
+    def fetch_company_name(companies, taxpayer_id):
+        for company in companies:
+            if rows := company.cur.execute(
+                f'SELECT * FROM "{company.table_name}" WHERE taxpayer_id=?',
+                (taxpayer_id,),
+            ).fetchall():
+                yield rows[0][1], rows[0][2], True
+            else:
+                yield company.get_company_by_taxpayer_id(taxpayer_id, 3), str(company), False
 
 
 class BaseUnifiedCompanies(abc.ABC):
@@ -100,12 +101,12 @@ class BaseUnifiedCompanies(abc.ABC):
         except requests.exceptions.RequestException as e:
             logger.error(f"An error occurred during the API request - {e}. Proxy - {used_proxy}.Text - {response.text}")
 
-    def cache_add_and_save(self, taxpayer_id: str, company_name: str, country: str) -> None:
+    def cache_add_and_save(self, taxpayer_id: str, company_name: str, country: Union[str, list]) -> None:
         """
         Saving and adding the result to the cache.
         """
         self.cur.executemany(f"INSERT or REPLACE INTO {self.table_name} VALUES(?, ?, ?)",
-                             [(taxpayer_id, company_name, country)])
+                             [(taxpayer_id, company_name, str(country))])
         self.conn.commit()
 
 
@@ -339,10 +340,8 @@ class SearchEngineParser(BaseUnifiedCompanies):
         for item_inn in values:
             for unified_company in unified_companies:
                 with contextlib.suppress(Exception):
-                    if self.country and unified_company.is_valid(item_inn):
-                        dict_inn[item_inn] = dict_inn[item_inn] + 1 if item_inn in dict_inn else count_inn
-                    elif unified_company.is_valid(item_inn):
-                        self.country = unified_company
+                    if unified_company.is_valid(item_inn):
+                        self.country if unified_company in self.country else self.country.append(unified_company)
                         dict_inn[item_inn] = dict_inn[item_inn] + 1 if item_inn in dict_inn else count_inn
 
     @staticmethod
@@ -425,7 +424,7 @@ class SearchEngineParser(BaseUnifiedCompanies):
         rows: sqlite3.Cursor = self.cur.execute(f'SELECT * FROM "{self.table_name}" WHERE taxpayer_id=?', (value,), )
         if (list_rows := list(rows)) and list_rows[0][1]:
             logger.info(f"Data is {list_rows[0][0]}. INN is {list_rows[0][1]}")
-            return api_inn, list_rows[0][1], list_rows[0][2]
+            return api_inn, list_rows[0][1]
         try:
             api_inn: dict = self.get_inn_from_search_engine(value)
             best_found_inn = max(api_inn, key=api_inn.get, default=None)
@@ -437,11 +436,8 @@ class SearchEngineParser(BaseUnifiedCompanies):
         except ConnectionRefusedError:
             time.sleep(60)
             self.get_taxpayer_id(value, number_attempts - 1)
-        return api_inn, best_found_inn, self.country
+        return api_inn, best_found_inn
 
 
 if __name__ == "__main__":
-    print(UnifiedRussianCompanies().is_valid("302928567"))
-    print(UnifiedKazakhstanCompanies().is_valid("302928567"))
-    print(UnifiedBelarusCompanies().is_valid("302928567"))
-    print(UnifiedUzbekistanCompanies().is_valid("302928567"))
+    print(list(UnifiedCompaniesManager().get_valid_company("302928567")))
