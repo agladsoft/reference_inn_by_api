@@ -3,9 +3,7 @@ import sys
 import json
 import sqlite3
 import datetime
-import contextlib
 import numpy as np
-import validate_inn
 import pandas as pd
 from __init__ import *
 from queue import Queue
@@ -20,10 +18,10 @@ from threading import current_thread, Lock
 from pandas.io.parsers import TextFileReader
 from clickhouse_connect.driver import Client
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Tuple, Union, Dict, Optional
 from clickhouse_connect.driver.query import QueryResult
 from deep_translator import GoogleTranslator, exceptions
-from inn_api import LegalEntitiesParser, SearchEngineParser
+from typing import List, Tuple, Union, Dict, Optional, Any
+from unified_companies import UnifiedCompaniesManager, SearchEngineParser
 
 errors = []
 
@@ -120,18 +118,18 @@ class ReferenceInn(object):
             fuzz_company_name_two: int = fuzz.partial_ratio(company_name_en.upper(), translated.upper())
             data['confidence_rate'] = max(fuzz_company_name, fuzz_company_name_two)
 
-    def get_all_data(
+    def get_data(
             self,
             fts: dict,
-            provider: LegalEntitiesParser,
+            country: Optional[Any],
+            manager,
             data: dict,
             inn: Union[str, None],
             sentence: str,
             index: int,
             num_inn_in_fts: dict,
             list_inn_in_fts: list,
-            translated:
-            Optional[str] = None,
+            translated: Optional[str] = None,
             inn_count: int = 1,
             sum_count_inn: int = 1,
             enforce_get_company: bool = False
@@ -150,9 +148,10 @@ class ReferenceInn(object):
         num_inn_in_fts["company_inn_max_rank"] += 1
         if not data["is_fts_found"] and not enforce_get_company:
             return
-        company_name, is_cache = provider.get_company_name_by_inn(inn, index)
+        company_name, country, is_cache = manager.fetch_company_name(country, inn)
         data["is_company_name_from_cache"] = is_cache
         data["company_name_unified"] = company_name
+        data["country"] = country
         self.compare_different_fuzz(company_name, translated, data)
         logger.info(f"Data was written successfully to the dictionary. Data is {sentence}", pid=current_thread().ident)
         self.write_to_csv(index, data)
@@ -173,74 +172,75 @@ class ReferenceInn(object):
             translated = re.sub(" +", " ", translated).strip()
         return translated
 
-    def get_inn_from_row(self, sentence: str, data: dict, index: int, fts: dict) -> None:
+    def unify_companies(self, sentence, data: dict, index: int, fts: dict):
         """
-        Full processing of the sentence, including 1). inn search by offer -> company search by inn,
-        2). inn search in yandex by request -> company search by inn.
-        """
-        list_inn: list = []
-        logger.info(f"Processing of a row with index {index} begins. Data is {sentence}", pid=current_thread().ident)
-        all_list_inn: list = re.findall(r"\d+", sentence)
-        cache_inn: LegalEntitiesParser = LegalEntitiesParser()
-        for item_inn in all_list_inn:
-            with contextlib.suppress(Exception):
-                item_inn2 = validate_inn.validate(item_inn)
-                list_inn.append(item_inn2)
-                logger.info(f"Found INN in sentence. Index is {index}. Data is {sentence}", pid=current_thread().ident)
-        logger.info(f"The attempt to find the INN in sentence is completed. Index is {index}. Data is {sentence}",
-                    pid=current_thread().ident)
-        self.get_company_name_from_internet(list_inn, cache_inn, sentence, data, index, fts)
 
-    def get_company_name_from_internet(
-            self, list_inn: list,
-            cache_inn: LegalEntitiesParser,
-            sentence: str,
-            data: dict,
-            index: int,
-            fts: dict
-    ) -> None:
+        :param sentence:
+        :param data:
+        :param index:
+        :param fts:
+        :return:
         """
-        Getting company name from dadata or get inn from Yandex, then get company name from dadata.
-        """
-        translated: Optional[str] = self.get_translated_sentence(sentence)
         list_inn_in_fts: List[dict] = []
+        manager = UnifiedCompaniesManager()
+        dict_taxpayer_ids, taxpayer_id, country = self.extract_taxpayer_id(sentence, manager)
+
+        translated: Optional[str] = self.get_translated_sentence(sentence)
         num_inn_in_fts: Dict[str, int] = {"num_inn_in_fts": 0, "company_inn_max_rank": 1}
-        if list_inn:
-            self.get_all_data(fts, cache_inn, data, list_inn[0], sentence, index, num_inn_in_fts, list_inn_in_fts,
-                              translated, enforce_get_company=True)
+
+        if taxpayer_id and (country := manager.get_valid_company(taxpayer_id)):
+            self.parse_all_found_inn(fts, dict_taxpayer_ids, taxpayer_id, country, manager, data, sentence, index,
+                                     num_inn_in_fts, list_inn_in_fts, translated)
         else:
-            cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", self.conn, self.queue)
-            if api_inn := cache_name_inn.get_company_name_by_inn(translated, index):
-                self.parse_all_found_inn(fts, api_inn, cache_inn, sentence, translated, data, index, num_inn_in_fts,
-                                         list_inn_in_fts)
-            else:
-                self.get_all_data(fts, cache_inn, data, None, sentence, index, num_inn_in_fts, list_inn_in_fts,
-                                  translated, inn_count=0, sum_count_inn=0)
+            self.get_data(fts, None, manager, data, taxpayer_id, sentence, index, num_inn_in_fts, list_inn_in_fts,
+                          translated, inn_count=0, sum_count_inn=0)
         self.write_existing_inn_from_fts(index, data, list_inn_in_fts, num_inn_in_fts)
+
+    @staticmethod
+    def extract_taxpayer_id(sentence, manager):
+        """
+
+        :param sentence:
+        :param manager:
+        :return:
+        """
+        country: Optional[object] = None
+        dict_taxpayer_ids: dict = {}
+        all_digits = re.findall(r"\d+", sentence)
+
+        for item_inn in all_digits:
+            if country := manager.get_valid_company(item_inn):
+                return dict_taxpayer_ids, item_inn, country
+
+        # If no valid taxpayer ID found, use search engine
+        search_engine = SearchEngineParser(country)
+        dict_taxpayer_ids, taxpayer_id, country = search_engine.get_taxpayer_id(sentence, 3)
+        return dict_taxpayer_ids, taxpayer_id, country
 
     def parse_all_found_inn(
             self,
             fts: dict,
-            api_inn: dict,
-            cache_inn: LegalEntitiesParser,
-            sentence: str,
-            translated: str,
+            dict_taxpayer_ids: dict,
+            taxpayer_id: str,
+            country: Optional[Any],
+            manager: Any,
             data: dict,
+            sentence: str,
             index: int,
             num_inn_in_fts: dict,
-            list_inn_in_fts: list
+            list_inn_in_fts: list,
+            translated: str
     ) -> None:
         """
         We extract data on all found INN from Yandex.
         """
-        sum_count_inn: int = sum(api_inn.values())
-        for inn, inn_count in api_inn.items():
-            self.get_all_data(fts, cache_inn, data, inn, sentence, index, num_inn_in_fts, list_inn_in_fts,
-                              translated, inn_count, sum_count_inn)
+        sum_count_inn: int = sum(dict_taxpayer_ids.values())
+        for inn, inn_count in dict_taxpayer_ids.items():
+            self.get_data(fts, country, manager, data, inn, sentence, index, num_inn_in_fts, list_inn_in_fts,
+                          translated, inn_count=inn_count, sum_count_inn=sum_count_inn,  enforce_get_company=True)
         if not list_inn_in_fts:
-            self.get_all_data(fts, cache_inn, data, max(api_inn, key=api_inn.get), sentence, index,
-                              num_inn_in_fts, list_inn_in_fts, translated, inn_count=0,
-                              sum_count_inn=sum_count_inn, enforce_get_company=True)
+            self.get_data(fts, country, manager, data, taxpayer_id, sentence, index, num_inn_in_fts, list_inn_in_fts,
+                          translated, inn_count=0, sum_count_inn=sum_count_inn, enforce_get_company=True)
 
     def write_existing_inn_from_fts(self, index: int, data: dict, list_inn_in_fts: list, num_inn_in_fts: dict) -> None:
         """
@@ -368,7 +368,7 @@ class ReferenceInn(object):
         self.add_new_columns(data, start_time_script)
         sentence: str = data.get("company_name")
         try:
-            self.get_inn_from_row(str(sentence), data, index, fts)
+            self.unify_companies(sentence, data, index, fts)
         except (IndexError, ValueError, TypeError) as ex:
             logger.error(f'Not found inn INN Yandex. Data is {index, sentence} (most likely a foreign company). '
                          f'Exception - {ex}. Type error - {type(ex)}', pid=current_thread().ident)
@@ -420,11 +420,11 @@ class ReferenceInn(object):
             balance: float = float(response_balance.text)
             if 200.0 > balance >= 100.0:
                 telegram(message=f"Баланс в Яндекс кошельке сейчас составляет {balance} рублей.")
-            elif balance < 100.0:
-                telegram(message='Баланс в Яндекс кошельке меньше 100 рублей. Пополните, пожалуйста, счет.')
-                logger.error("There is not enough money to process all the lines. Please top up your account")
-                logger_stream.error("не_хватает_денег_для_обработки_файла")
-                sys.exit(1)
+            # elif balance < 100.0:
+            #     telegram(message='Баланс в Яндекс кошельке меньше 100 рублей. Пополните, пожалуйста, счет.')
+            #     logger.error("There is not enough money to process all the lines. Please top up your account")
+            #     logger_stream.error("не_хватает_денег_для_обработки_файла")
+            #     sys.exit(1)
         except requests.exceptions.RequestException as e:
             logger.error(f"An error occurred while receiving data from xmlriver. Exception is {e}")
             logger_stream.error("ошибка_при_получении_баланса_яндекса")

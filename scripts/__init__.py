@@ -1,8 +1,8 @@
 import os
-import logging
 import time
-
+import logging
 import requests
+from itertools import cycle
 from dotenv import load_dotenv
 
 os.environ['XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS'] = '.'
@@ -19,19 +19,6 @@ REPLACED_QUOTES: list = ["<", ">", "«", "»", "’", "‘", "“", "”", "`", 
 
 REPLACED_WORDS: list = ["ООО", "OOO", "OОO", "ОOО", "OOО", "ООO", "ОАО", "ИП", "ЗАО", "3АО", "АО"]
 
-COUNTRIES_AND_CITIES: list = ["UZBEKISTAN", "KAZAKHSTAN", "BELARUS", "POLAND", "CZECH", "AMSTERDAM", "ROTTERDAM",
-                              "НИДЕРЛАНД", "HELSINKI", "КАЗАХСТАН", "УЗБЕКИСТАН", "БЕЛАРУСЬ", "ТАШКЕНТ", "SCHERPENZEEL",
-                              "ASAKA", "HUNGARY", "KYRGYZSTAN", "BISHKEK", "BANGLADESH", "NETHERLANDS", "BELGIUM",
-                              "WARSAW", "POLSKA", "TASHKENT", "ESENTEPE", "BANKASI", "WARSZAWA", "GERMANY",
-                              "PHILIPPSBURG", "NEDERLAND", "SCHERPENZEEL", "GDYNIA", "SWIDNICA", "SZCZECIN",
-                              "BURGAN BANK", "TURKEY", "ISTANBUL", "UNITED KINGDOM", "ATHENA", "ANGLIA", "SUFFOLK",
-                              "CHELMSFORD", "WOLFSBURG", "SLOVAKIA", "ALMATY", "BANGLADESH", "KOREA", "SEOUL",
-                              "ZASCIANKI", "TORUN", "MONGOLIA", "FRANCE", "GDYNIA", "BELSK DUZY", "SCHERPENZEEL",
-                              "KYRGYZSTAN", "NUR-SULTA", "KYRGYZ REPUBLIC", "TAJIKISTAN", "KILINSKIEGO", "LATVIA",
-                              "KOKAND", "GEORGEN AM WALDE", "SAMARKAND", "KARMANA", "MINSK"]
-
-COUNTRY_KAZAKHSTAN = ["KAZAKHSTAN ", "ALMATY", "+7727", "(727)", " BIN "]
-
 MESSAGE_TEMPLATE: dict = {
     '200': "The money ran out. Index is {}. Exception - {}. Value - {}",
     '110': "There are no free channels for data collection. Index is {}. Exception - {}. Value - {}",
@@ -45,6 +32,17 @@ PREFIX_TEMPLATE: dict = {
 }
 
 ERRORS = []
+
+
+PROXIES: list = [
+    'http://user139922:oulrqa@45.152.240.253:6330',
+    'http://user139922:oulrqa@45.152.240.220:6330',
+    'http://user139922:oulrqa@45.152.241.48:6330',
+    'http://user139922:oulrqa@45.152.240.105:6330',
+    'http://user139922:oulrqa@45.152.240.212:6330',
+    'http://MVlxrzOVPf:YKinSyphbo@195.201.106.30:12400'
+]
+CYCLED_PROXIES: cycle = cycle(PROXIES)
 
 
 class CustomAdapter(logging.LoggerAdapter):
@@ -84,29 +82,22 @@ class MissingEnvironmentVariable(Exception):
 
 
 def telegram(message):
-    # teg = get_notifier('telegram')
-    # teg.notify(token=TOKEN, chat_id=CHAT_ID, message=message)
     chat_id = get_my_env_var('CHAT_ID')
     token = get_my_env_var('TOKEN_TELEGRAM')
     topic = get_my_env_var('TOPIC')
     message_id = get_my_env_var('ID')
-    # teg.notify(token=get_my_env_var('TOKEN'), chat_id=get_my_env_var('CHAT_ID'), message=message)
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    # params = {"chat_id": f"{chat_id}/{topic}", "text": message,
-    #           'reply_to_message_id': message_id}  # Добавляем /2 для указания второго подканала
     logger.info("Отправка сообщения в телеграмм")
     if len(message) < 4095:
-        # params = {"chat_id": f"{chat_id}", "text": message}
         params = {"chat_id": f"{chat_id}/{topic}", "text": message,
                   'reply_to_message_id': message_id}  # Добавляем /2 для указания второго подканала
         response = requests.get(url, params=params)
+        logger.info(response)
     else:
         for n, x in enumerate(range(0, len(message), 4095), 1):
             m = message[x:x + 4095]
-            # params = {"chat_id": f"{chat_id}", "text": m}
             params = {"chat_id": f"{chat_id}/{topic}", "text": m,
                       'reply_to_message_id': message_id}  # Добавляем /2 для указания второго подканала
             response = requests.get(url, params=params)
             logger.info(f'Отправка сообщения #{n}, Статус отправки {response.status_code}')
             time.sleep(2)
-    # logger.info("Отправка сообщения в телеграмм")
