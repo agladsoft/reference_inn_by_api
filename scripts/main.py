@@ -185,9 +185,8 @@ class ReferenceInn(object):
         """
         list_inn_in_fts: List[dict] = []
         manager = UnifiedCompaniesManager()
-        dict_taxpayer_ids, taxpayer_id = self.extract_taxpayer_id(sentence, manager)
+        dict_taxpayer_ids, taxpayer_id, translated = self.extract_taxpayer_id(sentence, manager)
 
-        translated: Optional[str] = self.get_translated_sentence(sentence)
         num_inn_in_fts: Dict[str, int] = {"num_inn_in_fts": 0, "company_inn_max_rank": 1}
 
         if taxpayer_id and (country := manager.get_valid_company(taxpayer_id)):
@@ -198,8 +197,7 @@ class ReferenceInn(object):
                           translated, inn_count=0, sum_count_inn=0)
         self.write_existing_inn_from_fts(index, data, list_inn_in_fts, num_inn_in_fts)
 
-    @staticmethod
-    def extract_taxpayer_id(sentence, manager):
+    def extract_taxpayer_id(self, sentence, manager):
         """
 
         :param sentence:
@@ -215,9 +213,10 @@ class ReferenceInn(object):
                 return dict_taxpayer_ids, item_inn
 
         # If no valid taxpayer ID found, use search engine
+        translated: Optional[str] = self.get_translated_sentence(sentence)
         search_engine = SearchEngineParser(country)
-        dict_taxpayer_ids, taxpayer_id = search_engine.get_taxpayer_id(sentence, 3)
-        return dict_taxpayer_ids, taxpayer_id
+        dict_taxpayer_ids, taxpayer_id = search_engine.get_taxpayer_id(translated, 3)
+        return dict_taxpayer_ids, taxpayer_id, translated
 
     def parse_all_found_inn(
             self,
