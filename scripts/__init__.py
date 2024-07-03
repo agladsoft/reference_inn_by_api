@@ -35,12 +35,11 @@ ERRORS = []
 
 
 PROXIES: list = [
-    'http://user139922:oulrqa@45.152.240.253:6330',
-    'http://user139922:oulrqa@45.152.240.220:6330',
-    'http://user139922:oulrqa@45.152.241.48:6330',
-    'http://user139922:oulrqa@45.152.240.105:6330',
-    'http://user139922:oulrqa@45.152.240.212:6330',
-    'http://MVlxrzOVPf:YKinSyphbo@195.201.106.30:12400'
+    'http://user139922:oulrqa@181.215.227.151:1866',
+    'http://user139922:oulrqa@181.215.227.145:1866',
+    'http://user139922:oulrqa@181.215.227.225:1866',
+    'http://user139922:oulrqa@181.215.227.93:1866',
+    'http://user139922:oulrqa@181.215.227.198:1866'
 ]
 CYCLED_PROXIES: cycle = cycle(PROXIES)
 

@@ -16,13 +16,18 @@ from deep_translator import GoogleTranslator
 
 
 class UnifiedCompaniesManager:
-    def __init__(self):
-        self.unified_companies = [
-            UnifiedRussianCompanies(),
-            UnifiedKazakhstanCompanies(),
-            UnifiedBelarusCompanies(),
-            UnifiedUzbekistanCompanies()
-        ]
+    def __init__(self, only_russian):
+        if only_russian:
+            self.unified_companies = [
+                UnifiedRussianCompanies()
+            ]
+        else:
+            self.unified_companies = [
+                UnifiedRussianCompanies(),
+                UnifiedKazakhstanCompanies(),
+                UnifiedBelarusCompanies(),
+                UnifiedUzbekistanCompanies()
+            ]
 
     def get_valid_company(self, company_data):
         for unified_company in self.unified_companies:
@@ -83,12 +88,15 @@ class BaseUnifiedCompanies(abc.ABC):
 
     @staticmethod
     def get_response(url, country, method="GET", data=None):
+        """
+        Getting response from site.
+        """
         response: Optional[Response] = None
-        # proxy: str = next(CYCLED_PROXIES)
+        proxy: str = next(CYCLED_PROXIES)
         used_proxy: Optional[str] = None
         try:
             session: Session = requests.Session()
-            # session.proxies = {"http": proxy}
+            session.proxies = {"http": proxy}
             if method == "POST":
                 response = session.post(url, json=data, timeout=120)
             else:
@@ -186,8 +194,11 @@ class UnifiedRussianCompanies(BaseUnifiedCompanies):
             response.raise_for_status()
             data = response.json()
             if isinstance(data, str):
-                return None, False
-            return data[0][0].get('value') if data[0] else None
+                return None
+            elif data[0]:
+                company_name = data[0][0].get('value')
+                self.cache_add_and_save(taxpayer_id, company_name, self.__str__())
+                return company_name
         except requests.exceptions.RequestException as e:
             logger.error(f"An error occurred during the API request: {str(e)}")
             return None
@@ -321,11 +332,12 @@ class UnifiedUzbekistanCompanies(BaseUnifiedCompanies):
 
 
 class SearchEngineParser(BaseUnifiedCompanies):
-    def __init__(self, country):
+    def __init__(self, country, manager):
         super().__init__()
         self.table_name = "search_engine"
         self.cur: sqlite3.Cursor = self.load_cache()
         self.country = country
+        self.manager = manager
 
     def is_valid(self, number: str) -> bool:
         pass
@@ -333,16 +345,15 @@ class SearchEngineParser(BaseUnifiedCompanies):
     def get_company_by_taxpayer_id(self, taxpayer_id: str, number_attempts: int) -> Optional[str]:
         pass
 
-    def get_inn_from_site(self, dict_inn: dict, values: list, count_inn: int, unified_companies) -> None:
+    def get_inn_from_site(self, dict_inn: dict, values: list, count_inn: int) -> None:
         """
         Parse each site (description and title).
         """
         for item_inn in values:
-            for unified_company in unified_companies:
-                with contextlib.suppress(Exception):
-                    if unified_company.is_valid(item_inn):
-                        self.country if unified_company in self.country else self.country.append(unified_company)
-                        dict_inn[item_inn] = dict_inn[item_inn] + 1 if item_inn in dict_inn else count_inn
+            countries = list(self.manager.get_valid_company(item_inn))
+            for country in countries:
+                self.country if country in self.country else self.country.append(country)
+                dict_inn[item_inn] = dict_inn[item_inn] + 1 if item_inn in dict_inn else count_inn
 
     @staticmethod
     def get_code_error(error_code: ElemTree, value: str) -> None:
@@ -361,7 +372,7 @@ class SearchEngineParser(BaseUnifiedCompanies):
             else:
                 raise ConnectionRefusedError(message)
 
-    def parse_xml(self, response: Response, value: str, dict_inn: dict, count_inn: int, unified_companies):
+    def parse_xml(self, response: Response, value: str, dict_inn: dict, count_inn: int):
         """
         Parsing xml.
         """
@@ -375,8 +386,8 @@ class SearchEngineParser(BaseUnifiedCompanies):
             passage = doc.find('.//passage').text or ''
             inn_text: list = re.findall(r"\d+", passage)
             inn_title: list = re.findall(r"\d+", title)
-            self.get_inn_from_site(dict_inn, inn_text, count_inn, unified_companies)
-            self.get_inn_from_site(dict_inn, inn_title, count_inn, unified_companies)
+            self.get_inn_from_site(dict_inn, inn_text, count_inn)
+            self.get_inn_from_site(dict_inn, inn_title, count_inn)
 
     def get_inn_from_search_engine(self, value: str) -> dict:
         """
@@ -392,13 +403,7 @@ class SearchEngineParser(BaseUnifiedCompanies):
         logger.info(f"After request. Data is {value}")
         dict_inn: dict = {}
         count_inn: int = 1
-        unified_companies = [
-            UnifiedRussianCompanies(),
-            UnifiedKazakhstanCompanies(),
-            UnifiedBelarusCompanies(),
-            UnifiedUzbekistanCompanies()
-        ]
-        self.parse_xml(r, value, dict_inn, count_inn, unified_companies)
+        self.parse_xml(r, value, dict_inn, count_inn)
         logger.info(f"Dictionary with INN is {dict_inn}. Data is {value}")
         return dict_inn
 
@@ -424,20 +429,15 @@ class SearchEngineParser(BaseUnifiedCompanies):
         rows: sqlite3.Cursor = self.cur.execute(f'SELECT * FROM "{self.table_name}" WHERE taxpayer_id=?', (value,), )
         if (list_rows := list(rows)) and list_rows[0][1]:
             logger.info(f"Data is {list_rows[0][0]}. INN is {list_rows[0][1]}")
-            return api_inn, list_rows[0][1]
+            return api_inn, list_rows[0][1], True
         try:
             api_inn: dict = self.get_inn_from_search_engine(value)
             best_found_inn = max(api_inn, key=api_inn.get, default=None)
-            self.cache_add_and_save(
-                value,
-                best_found_inn,
-                self.country.__str__() if self.country else self.country
-            )
         except ConnectionRefusedError:
             time.sleep(60)
             self.get_taxpayer_id(value, number_attempts - 1)
-        return api_inn, best_found_inn
+        return api_inn, best_found_inn, False
 
 
 if __name__ == "__main__":
-    print(list(UnifiedCompaniesManager().get_valid_company("302928567")))
+    print(list(UnifiedCompaniesManager(only_russian=True).get_valid_company("302928567")))
