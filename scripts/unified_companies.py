@@ -92,11 +92,11 @@ class BaseUnifiedCompanies(abc.ABC):
         Getting response from site.
         """
         response: Optional[Response] = None
-        # proxy: str = next(CYCLED_PROXIES)
+        proxy: str = next(CYCLED_PROXIES)
         used_proxy: Optional[str] = None
         try:
             session: Session = requests.Session()
-            # session.proxies = {"http": proxy}
+            session.proxies = {"http": proxy}
             if method == "POST":
                 response = session.post(url, json=data, timeout=120)
             else:
@@ -190,7 +190,7 @@ class UnifiedRussianCompanies(BaseUnifiedCompanies):
             "inn": taxpayer_id
         }
         try:
-            response: Response = requests.post("http://10.23.4.203:8003", json=data)
+            response: Response = requests.post("http://service_inn:8003", json=data)
             response.raise_for_status()
             data = response.json()
             if isinstance(data, str):
