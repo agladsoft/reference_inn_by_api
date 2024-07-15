@@ -26,7 +26,7 @@ class UnifiedCompaniesManager:
                 UnifiedRussianCompanies(),
                 UnifiedKazakhstanCompanies(),
                 UnifiedBelarusCompanies(),
-                UnifiedUzbekistanCompanies()
+                # UnifiedUzbekistanCompanies()
             ]
 
     def get_valid_company(self, company_data):
@@ -92,11 +92,11 @@ class BaseUnifiedCompanies(abc.ABC):
         Getting response from site.
         """
         response: Optional[Response] = None
-        proxy: str = next(CYCLED_PROXIES)
+        # proxy: str = next(CYCLED_PROXIES)
         used_proxy: Optional[str] = None
         try:
             session: Session = requests.Session()
-            session.proxies = {"http": proxy}
+            # session.proxies = {"http": proxy}
             if method == "POST":
                 response = session.post(url, json=data, timeout=120)
             else:
@@ -190,7 +190,7 @@ class UnifiedRussianCompanies(BaseUnifiedCompanies):
             "inn": taxpayer_id
         }
         try:
-            response: Response = requests.post("http://service_inn:8003", json=data)
+            response: Response = requests.post("http://10.23.4.203:8003", json=data)
             response.raise_for_status()
             data = response.json()
             if isinstance(data, str):
@@ -434,7 +434,7 @@ class SearchEngineParser(BaseUnifiedCompanies):
             api_inn: dict = self.get_inn_from_search_engine(value)
             best_found_inn = max(api_inn, key=api_inn.get, default=None)
         except ConnectionRefusedError:
-            time.sleep(20)
+            time.sleep(60)
             self.get_taxpayer_id(value, number_attempts - 1)
         return api_inn, best_found_inn, False
 
