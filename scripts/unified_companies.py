@@ -434,7 +434,7 @@ class SearchEngineParser(BaseUnifiedCompanies):
             api_inn: dict = self.get_inn_from_search_engine(value)
             best_found_inn = max(api_inn, key=api_inn.get, default=None)
         except ConnectionRefusedError:
-            time.sleep(60)
+            time.sleep(20)
             self.get_taxpayer_id(value, number_attempts - 1)
         return api_inn, best_found_inn, False
 
