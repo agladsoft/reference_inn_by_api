@@ -137,7 +137,7 @@ class SearchEngineParser(LegalEntitiesParser):
         count_inn: int = 1
         try:
             self.parse_xml(r, index, value, dict_inn, count_inn)
-        except Exception as ex:
+        except (ValueError, KeyError, AttributeError) as ex:
             logger.warning(f"Description {value} not found in the Yandex. Index is {index}. Exception - {ex}",
                            pid=current_thread().ident)
             logger_stream.warning(f"Description {value} not found in the Yandex. Index is {index}. "
