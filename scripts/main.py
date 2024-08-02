@@ -183,8 +183,8 @@ class ReferenceInn(object):
             logger.info(f"Try translate sentence to russian. Data is {sentence}", pid=current_thread().ident)
             sentence: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500])
             sentence = self.replace_quotes(sentence, quotes=['"', '«', '»', sign], replaced_str=' ')
-        sentence = re.sub(" +", " ", sentence).strip()
-        return sentence
+        sentence: str = sentence.translate({ord(c): " " for c in r"+"})
+        return re.sub(" +", " ", sentence).strip()
 
     def unify_companies(self, sentence, data: dict, index: int, fts: dict, only_russian: bool):
         """
@@ -220,11 +220,11 @@ class ReferenceInn(object):
         :return:
         """
         dict_taxpayer_ids: dict = {}
-        all_digits = re.findall(r"\d+", sentence)
+        # all_digits = re.findall(r"\d+", sentence)
 
-        for item_inn in all_digits:
-            if list(search_engine.manager.get_valid_company(item_inn)):
-                return dict_taxpayer_ids, item_inn, None
+        # for item_inn in all_digits:
+        #     if list(search_engine.manager.get_valid_company(item_inn)):
+        #         return dict_taxpayer_ids, item_inn, None
 
         # If no valid taxpayer ID found, use search engine
         dict_taxpayer_ids, taxpayer_id, from_cache = search_engine.get_taxpayer_id(translated, 3)
@@ -558,9 +558,9 @@ class ReferenceInn(object):
                                               only_russian=False)
         self.write_to_json()
         logger.info("Push data to db")
-        self.push_data_to_db(start_time)
+        # self.push_data_to_db(start_time)
         logger.info("The script has completed its work")
-        self.send_message()
+        # self.send_message()
 
 
 if __name__ == "__main__":

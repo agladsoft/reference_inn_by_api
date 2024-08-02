@@ -19,11 +19,13 @@ class UnifiedCompaniesManager:
     def __init__(self, only_russian):
         if only_russian:
             self.unified_companies = [
-                UnifiedRussianCompanies()
+                UnifiedRussianCompanies(),
+                UnifiedKazakhstanCompanies(),
+                UnifiedBelarusCompanies(),
+                # UnifiedUzbekistanCompanies()
             ]
         else:
             self.unified_companies = [
-                UnifiedRussianCompanies(),
                 UnifiedKazakhstanCompanies(),
                 UnifiedBelarusCompanies(),
                 # UnifiedUzbekistanCompanies()
