@@ -558,9 +558,9 @@ class ReferenceInn(object):
                                               only_russian=False)
         self.write_to_json()
         logger.info("Push data to db")
-        # self.push_data_to_db(start_time)
+        self.push_data_to_db(start_time)
         logger.info("The script has completed its work")
-        # self.send_message()
+        self.send_message()
 
 
 if __name__ == "__main__":
