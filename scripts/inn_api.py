@@ -114,7 +114,7 @@ class SearchEngineParser(LegalEntitiesParser):
 
         # Find all title and passage elements
         for doc in root.findall(".//doc"):
-            title = doc.find('title').text
+            title = doc.find('title').text if doc.find('title').text is not None else ''
             passage = doc.find('.//passage').text if doc.find('.//passage').text is not None else ''
             inn_text: list = re.findall(r"\d+", passage)
             inn_title: list = re.findall(r"\d+", title)
