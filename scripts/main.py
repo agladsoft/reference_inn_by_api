@@ -202,9 +202,16 @@ class ReferenceInn(object):
         translated: Optional[str] = self.clear_symbols(sentence, only_russian)
         num_inn_in_fts: Dict[str, int] = {"num_inn_in_fts": 0, "company_inn_max_rank": 1}
         dict_taxpayer_ids, taxpayer_id, from_cache = self.extract_taxpayer_id(search_engine, sentence, translated)
-        if taxpayer_id and (country := list(search_engine.manager.get_valid_company(taxpayer_id))):
-            self.parse_all_found_inn(fts, dict_taxpayer_ids, taxpayer_id, country, search_engine, data, sentence, index,
-                                     num_inn_in_fts, list_inn_in_fts, translated)
+        countries = list(
+            {
+                item
+                for inn in dict_taxpayer_ids
+                for item in search_engine.manager.get_valid_company(inn)
+            }
+        )
+        if taxpayer_id:
+            self.parse_all_found_inn(fts, dict_taxpayer_ids, taxpayer_id, countries, search_engine, data, sentence,
+                                     index, num_inn_in_fts, list_inn_in_fts, translated)
         else:
             self.get_data(fts, None, search_engine, data, taxpayer_id, sentence, index, num_inn_in_fts, list_inn_in_fts,
                           translated, inn_count=0, sum_count_inn=0)
