@@ -20,8 +20,8 @@ class UnifiedCompaniesManager:
         if only_russian:
             self.unified_companies = [
                 UnifiedRussianCompanies(),
-                UnifiedKazakhstanCompanies(),
-                UnifiedBelarusCompanies(),
+                # UnifiedKazakhstanCompanies(),
+                # UnifiedBelarusCompanies(),
                 # UnifiedUzbekistanCompanies()
             ]
         else:
