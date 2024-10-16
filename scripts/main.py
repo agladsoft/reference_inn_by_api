@@ -3,9 +3,7 @@ import sys
 import json
 import sqlite3
 import datetime
-import contextlib
 import numpy as np
-import validate_inn
 import pandas as pd
 from __init__ import *
 from queue import Queue
@@ -20,21 +18,21 @@ from threading import current_thread, Lock
 from pandas.io.parsers import TextFileReader
 from clickhouse_connect.driver import Client
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Tuple, Union, Dict, Optional
 from clickhouse_connect.driver.query import QueryResult
 from deep_translator import GoogleTranslator, exceptions
-from inn_api import LegalEntitiesParser, SearchEngineParser
-
-errors = []
+from typing import List, Tuple, Union, Dict, Optional, Any
+from unified_companies import UnifiedCompaniesManager, SearchEngineParser
 
 
 class ReferenceInn(object):
     def __init__(self, filename, directory):
         self.conn: Optional[Connection] = None
         self.filename: str = filename
-        self.directory = directory
+        self.directory: str = directory
+        self.russian_companies: list = []
+        self.foreign_companies: list = []
+        self.unknown_companies: list = []
         self.lock: Lock = Lock()
-        self.queue = False
         self.telegram: Dict[str, Optional[int, str]] = {
             'company_name_unified': 0,
             'is_fts_found': 0,
@@ -120,18 +118,29 @@ class ReferenceInn(object):
             fuzz_company_name_two: int = fuzz.partial_ratio(company_name_en.upper(), translated.upper())
             data['confidence_rate'] = max(fuzz_company_name, fuzz_company_name_two)
 
-    def get_all_data(
+    def append_data(self, data: dict):
+        """
+        Append dictionary to list with countries.
+        """
+        if data.get("country") == "russia":
+            self.russian_companies.append(data)
+        elif data.get("country") is None:
+            self.unknown_companies.append(data)
+        else:
+            self.foreign_companies.append(data)
+
+    def get_data(
             self,
             fts: dict,
-            provider: LegalEntitiesParser,
+            country: Optional[Any],
+            search_engine: Any,
             data: dict,
             inn: Union[str, None],
             sentence: str,
             index: int,
             num_inn_in_fts: dict,
             list_inn_in_fts: list,
-            translated:
-            Optional[str] = None,
+            translated: Optional[str] = None,
             inn_count: int = 1,
             sum_count_inn: int = 1,
             enforce_get_company: bool = False
@@ -149,116 +158,139 @@ class ReferenceInn(object):
         data["company_inn_max_rank"] = num_inn_in_fts["company_inn_max_rank"]
         num_inn_in_fts["company_inn_max_rank"] += 1
         if not data["is_fts_found"] and not enforce_get_company:
+            self.write_to_csv(index, data)
             return
-        company_name, is_cache = provider.get_company_name_by_inn(inn, index)
-        data["is_company_name_from_cache"] = is_cache
-        data["company_name_unified"] = company_name
-        self.compare_different_fuzz(company_name, translated, data)
+        companies = list(search_engine.manager.fetch_company_name(country, inn))
+        for company_name, country, is_cache in companies:
+            if company_name is not None:
+                data["is_company_name_from_cache"] = is_cache
+                data["company_name_unified"] = company_name
+                data["country"] = country
+                self.compare_different_fuzz(company_name, translated, data)
         logger.info(f"Data was written successfully to the dictionary. Data is {sentence}", pid=current_thread().ident)
         self.write_to_csv(index, data)
         list_inn_in_fts.append(data.copy())
 
-    def get_translated_sentence(self, sentence: str) -> Optional[str]:
+    def clear_symbols(self, sentence: str, only_russian: bool) -> Optional[str]:
         """
         Getting translated sentence.
         """
-        sign: str = '/'
-        sentence: str = sentence.translate({ord(c): " " for c in r".,!@#$%^&*()[]{};?\|~=_+"})
-        sentence = self.replace_quotes(sentence, replaced_str=' ')
-        sentence = re.sub(" +", " ", sentence).strip() + sign
-        logger.info(f"Try translate sentence to russian. Data is {sentence}", pid=current_thread().ident)
-        translated: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500])
-        if translated:
-            translated = self.replace_quotes(translated, quotes=['"', '«', '»', sign], replaced_str=' ')
-            translated = re.sub(" +", " ", translated).strip()
-        return translated
+        if only_russian:
+            sign: str = '/'
+            sentence: str = sentence.translate({ord(c): " " for c in r".,!@#$%^&*()[]{};?\|~=_+"})
+            sentence = self.replace_quotes(sentence, replaced_str=' ')
+            sentence = re.sub(" +", " ", sentence).strip() + sign
+            logger.info(f"Try translate sentence to russian. Data is {sentence}", pid=current_thread().ident)
+            sentence: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500])
+            sentence = self.replace_quotes(sentence, quotes=['"', '«', '»', sign], replaced_str=' ')
+        sentence: str = sentence.translate({ord(c): " " for c in r"+"})
+        return re.sub(" +", " ", sentence).strip()
 
-    def get_inn_from_row(self, sentence: str, data: dict, index: int, fts: dict) -> None:
+    def unify_companies(self, sentence, data: dict, index: int, fts: dict, only_russian: bool):
         """
-        Full processing of the sentence, including 1). inn search by offer -> company search by inn,
-        2). inn search in yandex by request -> company search by inn.
-        """
-        list_inn: list = []
-        logger.info(f"Processing of a row with index {index} begins. Data is {sentence}", pid=current_thread().ident)
-        all_list_inn: list = re.findall(r"\d+", sentence)
-        cache_inn: LegalEntitiesParser = LegalEntitiesParser()
-        for item_inn in all_list_inn:
-            with contextlib.suppress(Exception):
-                item_inn2 = validate_inn.validate(item_inn)
-                list_inn.append(item_inn2)
-                logger.info(f"Found INN in sentence. Index is {index}. Data is {sentence}", pid=current_thread().ident)
-        logger.info(f"The attempt to find the INN in sentence is completed. Index is {index}. Data is {sentence}",
-                    pid=current_thread().ident)
-        self.get_company_name_from_internet(list_inn, cache_inn, sentence, data, index, fts)
 
-    def get_company_name_from_internet(
-            self, list_inn: list,
-            cache_inn: LegalEntitiesParser,
-            sentence: str,
-            data: dict,
-            index: int,
-            fts: dict
-    ) -> None:
+        :param sentence:
+        :param data:
+        :param index:
+        :param fts:
+        :param only_russian: bool
+        :return:
         """
-        Getting company name from dadata or get inn from Yandex, then get company name from dadata.
-        """
-        translated: Optional[str] = self.get_translated_sentence(sentence)
         list_inn_in_fts: List[dict] = []
+        country: Optional[List[object]] = []
+        search_engine = SearchEngineParser(country, UnifiedCompaniesManager(only_russian))
+        translated: Optional[str] = self.clear_symbols(sentence, only_russian)
         num_inn_in_fts: Dict[str, int] = {"num_inn_in_fts": 0, "company_inn_max_rank": 1}
-        if list_inn:
-            self.get_all_data(fts, cache_inn, data, list_inn[0], sentence, index, num_inn_in_fts, list_inn_in_fts,
-                              translated, enforce_get_company=True)
+        dict_taxpayer_ids, taxpayer_id, from_cache = self.extract_taxpayer_id(search_engine, sentence, translated)
+        countries = list(
+            {
+                item
+                for inn in dict_taxpayer_ids
+                for item in search_engine.manager.get_valid_company(inn)
+            }
+        )
+        if taxpayer_id:
+            self.parse_all_found_inn(fts, dict_taxpayer_ids, taxpayer_id, countries, search_engine, data, sentence,
+                                     index, num_inn_in_fts, list_inn_in_fts, translated)
         else:
-            cache_name_inn: SearchEngineParser = SearchEngineParser("company_name_and_inn", self.conn, self.queue)
-            if api_inn := cache_name_inn.get_company_name_by_inn(translated, index):
-                self.parse_all_found_inn(fts, api_inn, cache_inn, sentence, translated, data, index, num_inn_in_fts,
-                                         list_inn_in_fts)
-            else:
-                self.get_all_data(fts, cache_inn, data, None, sentence, index, num_inn_in_fts, list_inn_in_fts,
-                                  translated, inn_count=0, sum_count_inn=0)
-        self.write_existing_inn_from_fts(index, data, list_inn_in_fts, num_inn_in_fts)
+            self.get_data(fts, None, search_engine, data, taxpayer_id, sentence, index, num_inn_in_fts, list_inn_in_fts,
+                          translated, inn_count=0, sum_count_inn=0)
+        self.write_existing_inn_from_fts(search_engine, index, data, list_inn_in_fts, num_inn_in_fts, from_cache)
+
+    @staticmethod
+    def extract_taxpayer_id(search_engine, sentence, translated):
+        """
+
+        :param search_engine:
+        :param sentence:
+        :param translated:
+        :return:
+        """
+        dict_taxpayer_ids: dict = {}
+        # all_digits = re.findall(r"\d+", sentence)
+
+        # for item_inn in all_digits:
+        #     if list(search_engine.manager.get_valid_company(item_inn)):
+        #         return dict_taxpayer_ids, item_inn, None
+
+        # If no valid taxpayer ID found, use search engine
+        dict_taxpayer_ids, taxpayer_id, from_cache = search_engine.get_taxpayer_id(translated, 3)
+        return dict_taxpayer_ids, taxpayer_id, from_cache
 
     def parse_all_found_inn(
             self,
             fts: dict,
-            api_inn: dict,
-            cache_inn: LegalEntitiesParser,
-            sentence: str,
-            translated: str,
+            dict_taxpayer_ids: dict,
+            taxpayer_id: str,
+            country: Optional[Any],
+            search_engine: Any,
             data: dict,
+            sentence: str,
             index: int,
             num_inn_in_fts: dict,
-            list_inn_in_fts: list
+            list_inn_in_fts: list,
+            translated: str
     ) -> None:
         """
         We extract data on all found INN from Yandex.
         """
-        sum_count_inn: int = sum(api_inn.values())
-        for inn, inn_count in api_inn.items():
-            self.get_all_data(fts, cache_inn, data, inn, sentence, index, num_inn_in_fts, list_inn_in_fts,
-                              translated, inn_count, sum_count_inn)
+        sum_count_inn: int = sum(dict_taxpayer_ids.values())
+        for inn, inn_count in dict_taxpayer_ids.items():
+            self.get_data(fts, country, search_engine, data, inn, sentence, index, num_inn_in_fts, list_inn_in_fts,
+                          translated, inn_count=inn_count, sum_count_inn=sum_count_inn,  enforce_get_company=True)
         if not list_inn_in_fts:
-            self.get_all_data(fts, cache_inn, data, max(api_inn, key=api_inn.get), sentence, index,
-                              num_inn_in_fts, list_inn_in_fts, translated, inn_count=0,
-                              sum_count_inn=sum_count_inn, enforce_get_company=True)
+            self.get_data(fts, country, search_engine, data, taxpayer_id, sentence, index, num_inn_in_fts,
+                          list_inn_in_fts, translated, inn_count=0, sum_count_inn=sum_count_inn,
+                          enforce_get_company=True)
 
-    def write_existing_inn_from_fts(self, index: int, data: dict, list_inn_in_fts: list, num_inn_in_fts: dict) -> None:
+    def write_existing_inn_from_fts(
+            self,
+            search_engine,
+            index: int,
+            data: dict,
+            list_inn_in_fts: list,
+            num_inn_in_fts: dict,
+            from_cache: bool
+    ) -> None:
         """
         Write data inn in files.
         """
-        list_is_found_fts: List[bool] = []
         logger.info(f"Check company_name in FTS. Index is {index}. Data is {data}", pid=current_thread().ident)
         for dict_inn in list_inn_in_fts:
             dict_inn["count_inn_in_fts"] = num_inn_in_fts["num_inn_in_fts"]
             if dict_inn["is_fts_found"]:
-                self.write_to_json(index, dict_inn)
-                list_is_found_fts.append(True)
-                break
-            else:
-                list_is_found_fts.append(False)
-        if not list_inn_in_fts or not all(list_is_found_fts):
-            max_dict_inn = max(list_inn_in_fts, key=lambda x: x["company_inn_count"]) if list_inn_in_fts else data
-            self.write_to_json(index, max_dict_inn)
+                self.append_data(dict_inn)
+                if not from_cache:
+                    search_engine.cache_add_and_save(dict_inn["company_name_rus"], dict_inn["company_inn"],
+                                                     dict_inn["country"])
+                return
+
+        # If no valid INNs found, use the one with the highest company_inn_count or fallback to data
+        max_dict_inn = max(list_inn_in_fts, key=lambda x: x["company_inn_count"], default=data)
+        self.append_data(max_dict_inn)
+        if not from_cache:
+            search_engine.cache_add_and_save(max_dict_inn["company_name_rus"], max_dict_inn["company_inn"],
+                                             max_dict_inn.get("country"))
 
     @staticmethod
     def join_fts(
@@ -291,7 +323,7 @@ class ReferenceInn(object):
 
     def write_to_csv(self, index: int, data: dict) -> None:
         """
-        Writing data to json.
+        Writing data to csv.
         """
         basename: str = os.path.basename(self.filename)
         output_file_path: str = os.path.join(f"{os.path.dirname(self.directory)}/csv",
@@ -302,27 +334,40 @@ class ReferenceInn(object):
             self.to_csv(output_file_path, data, 'w')
         logger.info(f"Data was written successfully to the file. Index is {index}", pid=current_thread().ident)
 
-    def count_to_telegram(self, data: Dict[str, str]) -> None:
+    def count_to_telegram(self, data: List[dict]) -> None:
         """
         Count company_unified,is_fts_found
         """
-        company_name_unified = data.get('company_name_unified')
-        is_fts_found = data.get('is_fts_found')
-        if company_name_unified:
-            self.telegram['company_name_unified'] += 1
-        if is_fts_found is None:
-            self.telegram['is_fts_found'] += 1
+        for row in data:
+            company_name_unified = row.get('company_name_unified')
+            is_fts_found = row.get('is_fts_found')
+            if company_name_unified:
+                self.telegram['company_name_unified'] += 1
+            if is_fts_found is None:
+                self.telegram['is_fts_found'] += 1
 
-    def write_to_json(self, index: int, data: dict) -> None:
+    @staticmethod
+    def write_to_file(file_path, data):
         """
-        Writing data to json.
+        Запись данных в файл.
         """
-        self.count_to_telegram(data)
-        basename: str = os.path.basename(self.filename)
-        output_file_path: str = os.path.join(self.directory, f'{basename}_{index}.json')
-        with open(f"{output_file_path}", 'w', encoding='utf-8') as f:
+        with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
-            logger.info(f"Data was written successfully to the file. Index is {index}", pid=current_thread().ident)
+            logger.info("Данные успешно записаны в файл", pid=current_thread().ident)
+
+    def write_to_json(self) -> None:
+        """
+        Запись данных в json.
+        """
+        self.count_to_telegram(self.russian_companies + self.foreign_companies + self.unknown_companies)
+        basename: str = os.path.basename(self.filename)
+        output_file_path: str = os.path.join(self.directory, f'{basename}_russia.json')
+        output_file_path_foreign: str = os.path.join(self.directory, f'{basename}_foreign.json')
+        output_file_path_unknown: str = os.path.join(self.directory, f'{basename}_unknown.json')
+
+        self.write_to_file(output_file_path, self.russian_companies)
+        self.write_to_file(output_file_path_foreign, self.foreign_companies)
+        self.write_to_file(output_file_path_unknown, self.unknown_companies)
 
     def add_index_in_queue(
             self,
@@ -330,7 +375,8 @@ class ReferenceInn(object):
             retry_queue: Queue,
             is_queue: bool,
             sentence: str,
-            index: int
+            index: int,
+            ex_full: Exception
     ) -> None:
         """
         Adding an index to the queue or writing empty data.
@@ -340,11 +386,10 @@ class ReferenceInn(object):
                          f"Data is {sentence}", pid=current_thread().ident)
             retry_queue.put(index)
         else:
+            ERRORS.append(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}')
             data_queue: dict = not_parsed_data[index - 2]
-            data_queue['original_file_name'] = os.path.basename(self.filename)
-            data_queue['original_file_parsed_on'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.write_to_csv(index, data_queue)
-            self.write_to_json(index, data_queue)
+            self.append_data(data_queue)
 
     def add_new_columns(self, data: dict, start_time_script: str):
         data['is_inn_found_auto'] = True
@@ -360,7 +405,8 @@ class ReferenceInn(object):
             fts: dict,
             start_time_script,
             retry_queue: Queue,
-            is_queue: bool = False
+            is_queue: bool = False,
+            only_russian: bool = True
     ) -> None:
         """
         Processing each row.
@@ -368,20 +414,18 @@ class ReferenceInn(object):
         self.add_new_columns(data, start_time_script)
         sentence: str = data.get("company_name")
         try:
-            self.get_inn_from_row(str(sentence), data, index, fts)
+            self.unify_companies(sentence, data, index, fts, only_russian)
         except (IndexError, ValueError, TypeError) as ex:
             logger.error(f'Not found inn INN Yandex. Data is {index, sentence} (most likely a foreign company). '
                          f'Exception - {ex}. Type error - {type(ex)}', pid=current_thread().ident)
             logger_stream.error(f'Not found INN in Yandex. Data is {index, sentence} '
                                 f'(most likely a foreign company). Exception - {ex}. Type error - {type(ex)}')
             self.write_to_csv(index, data)
-            self.write_to_json(index, data)
+            self.append_data(data)
         except Exception as ex_full:
-            if self.queue:
-                ERRORS.append(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}')
             logger.error(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}',
                          pid=current_thread().ident)
-            self.add_index_in_queue(not_parsed_data, retry_queue, is_queue, sentence, index)
+            self.add_index_in_queue(not_parsed_data, retry_queue, is_queue, sentence, index, ex_full)
 
     @staticmethod
     def create_file_for_cache() -> str:
@@ -431,7 +475,7 @@ class ReferenceInn(object):
             sys.exit(1)
 
     def start_multiprocessing_with_queue(self, retry_queue: Queue, not_parsed_data: List[dict],
-                                         fts_results: dict, start_time: str) -> None:
+                                         fts_results: dict, start_time: str, only_russian: bool = True) -> None:
         """
         Starting queue processing using a multithreading.
         """
@@ -442,17 +486,35 @@ class ReferenceInn(object):
             with ThreadPoolExecutor(max_workers=COUNT_THREADS) as executor:
                 for _ in range(retry_queue.qsize()):
                     index_queue: int = retry_queue.get()
-                    executor.submit(self.parse_data, not_parsed_data, index_queue, not_parsed_data[index_queue - 2],
-                                    fts_results, start_time, retry_queue, True)
+                    executor.submit(
+                        self.parse_data,
+                        not_parsed_data,
+                        index_queue,
+                        not_parsed_data[index_queue - 2],
+                        fts_results,
+                        start_time,
+                        retry_queue,
+                        is_queue=True,
+                        only_russian=only_russian
+                    )
 
     def start_multiprocessing(self, retry_queue: Queue, not_parsed_data: List[dict], fts_results: dict,
-                              start_time: str) -> None:
+                              start_time: str, only_russian: bool = True) -> None:
         """
         Starting processing using a multithreading.
         """
         with ThreadPoolExecutor(max_workers=COUNT_THREADS) as executor:
-            for i, dict_data in enumerate(not_parsed_data, 2):
-                executor.submit(self.parse_data, not_parsed_data, i, dict_data, fts_results, start_time, retry_queue)
+            for index, dict_data in enumerate(not_parsed_data, 2):
+                executor.submit(
+                    self.parse_data,
+                    not_parsed_data,
+                    index,
+                    dict_data,
+                    fts_results,
+                    start_time,
+                    retry_queue,
+                    only_russian=only_russian
+                )
 
     def send_message(self):
         """
@@ -495,8 +557,13 @@ class ReferenceInn(object):
         self.start_multiprocessing(retry_queue, not_parsed_data, fts_results, start_time)
         logger.info(f"All rows have been processed. Is the queue empty? {retry_queue.empty()}",
                     pid=current_thread().ident)
-        self.queue = True
         self.start_multiprocessing_with_queue(retry_queue, not_parsed_data, fts_results, start_time)
+        unknown_companies = self.unknown_companies.copy()
+        self.unknown_companies = []
+        self.start_multiprocessing(retry_queue, unknown_companies, fts_results, start_time, only_russian=False)
+        self.start_multiprocessing_with_queue(retry_queue, unknown_companies, fts_results, start_time,
+                                              only_russian=False)
+        self.write_to_json()
         logger.info("Push data to db")
         self.push_data_to_db(start_time)
         logger.info("The script has completed its work")
