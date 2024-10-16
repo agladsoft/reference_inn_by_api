@@ -5,8 +5,6 @@ import requests
 from itertools import cycle
 from dotenv import load_dotenv
 
-os.environ['XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS'] = '.'
-
 COUNT_THREADS: int = 4
 TOKEN_TELEGRAM: str = "6557326533:AAHy6ls9LhTVTGztix8PUSK7BUSaHVEojXc"
 CHAT_ID: str = "-4051876751"
