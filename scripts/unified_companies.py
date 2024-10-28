@@ -1,6 +1,7 @@
 import re
 import abc
 import sqlite3
+import functools
 import contextlib
 from __init__ import *
 from pathlib import Path
@@ -13,6 +14,27 @@ from stdnum.util import clean, isdigits
 import xml.etree.ElementTree as ElemTree
 from typing import Union, List, Optional
 from deep_translator import GoogleTranslator
+
+
+def retry_on_failure(attempts: int = 3, delay: int = 20):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            attempt = 0
+            while attempt < attempts:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    attempt += 1
+                    if attempt >= attempts:
+                        logger.error(f"All {attempts} attempts failed: {e}")
+                        return None  # Возвращаем None после всех неудачных попыток
+                    logger.warning(
+                        f"Connection failed ({e}), retrying in {delay} seconds... (Attempt {attempt}/{attempts})"
+                    )
+                    time.sleep(delay)
+        return wrapper
+    return decorator
 
 
 class UnifiedCompaniesManager:
@@ -38,15 +60,15 @@ class UnifiedCompaniesManager:
                     yield unified_company
 
     @staticmethod
-    def fetch_company_name(companies, taxpayer_id):
-        for company in companies:
-            if rows := company.cur.execute(
-                f'SELECT * FROM "{company.table_name}" WHERE taxpayer_id=?',
-                (taxpayer_id,),
+    def fetch_company_name(countries, taxpayer_id):
+        for country_obj in countries:
+            if rows := country_obj.cur.execute(
+                f'SELECT * FROM "{country_obj.table_name}" WHERE taxpayer_id=? AND country=?',
+                (taxpayer_id, str(country_obj),),
             ).fetchall():
                 yield rows[0][1], rows[0][2], True
             else:
-                yield company.get_company_by_taxpayer_id(taxpayer_id, 3), str(company), False
+                yield country_obj.get_company_by_taxpayer_id(taxpayer_id), str(country_obj), False
 
 
 class BaseUnifiedCompanies(abc.ABC):
@@ -60,7 +82,7 @@ class BaseUnifiedCompanies(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_company_by_taxpayer_id(self, taxpayer_id: str, number_attempts: int) -> Optional[str]:
+    def get_company_by_taxpayer_id(self, taxpayer_id: str) -> Optional[str]:
         pass
 
     @staticmethod
@@ -93,7 +115,6 @@ class BaseUnifiedCompanies(abc.ABC):
         """
         Getting response from site.
         """
-        response: Optional[Response] = None
         proxy: str = next(CYCLED_PROXIES)
         used_proxy: Optional[str] = None
         try:
@@ -109,7 +130,8 @@ class BaseUnifiedCompanies(abc.ABC):
             response.raise_for_status()
             return response
         except requests.exceptions.RequestException as e:
-            logger.error(f"An error occurred during the API request - {e}. Proxy - {used_proxy}.Text - {response.text}")
+            logger.error(f"An error occurred during the API request - {e}. Proxy - {used_proxy}")
+            raise requests.exceptions.RequestException from e
 
     def cache_add_and_save(self, taxpayer_id: str, company_name: str, country: Union[str, list]) -> None:
         """
@@ -180,30 +202,26 @@ class UnifiedRussianCompanies(BaseUnifiedCompanies):
         except ValidationError:
             return False
 
-    def get_company_by_taxpayer_id(self, taxpayer_id: str, number_attempts: int):
+    @retry_on_failure(attempts=3, delay=5)
+    def get_company_by_taxpayer_id(self, taxpayer_id: str):
         """
         Getting the company name unified from the cache, if there is one.
         Otherwise, we are looking for verification of legal entities on websites.
         :param taxpayer_id:
-        :param number_attempts:
         :return:
         """
         data: dict = {
             "inn": taxpayer_id
         }
-        try:
-            response: Response = requests.post("http://service_inn:8003", json=data)
-            response.raise_for_status()
-            data = response.json()
-            if isinstance(data, str):
-                return None
-            elif data[0]:
-                company_name = data[0][0].get('value')
-                self.cache_add_and_save(taxpayer_id, company_name, self.__str__())
-                return company_name
-        except requests.exceptions.RequestException as e:
-            logger.error(f"An error occurred during the API request: {str(e)}")
+        response: Response = requests.post(f"http://{IP_ADDRESS_DADATA}:8003", json=data)
+        response.raise_for_status()
+        data = response.json()
+        if isinstance(data, str):
             return None
+        elif data[0]:
+            company_name = data[0][0].get('value')
+            self.cache_add_and_save(taxpayer_id, company_name, self.__str__())
+            return company_name
 
 
 class UnifiedKazakhstanCompanies(BaseUnifiedCompanies):
@@ -230,11 +248,11 @@ class UnifiedKazakhstanCompanies(BaseUnifiedCompanies):
             check_sum = self.multiply(w2, number) % 11
         return check_sum == int(number[-1])
 
-    def get_company_by_taxpayer_id(self, taxpayer_id: str, number_attempts: int):
+    @retry_on_failure(attempts=3, delay=5)
+    def get_company_by_taxpayer_id(self, taxpayer_id: str):
         """
 
         :param taxpayer_id:
-        :param number_attempts:
         :return:
         """
         data = {
@@ -242,8 +260,9 @@ class UnifiedKazakhstanCompanies(BaseUnifiedCompanies):
             "size": 10,
             "value": taxpayer_id
         }
-        if response := self.get_response("https://pk.uchet.kz/api/web/company/search/", self.__str__(), method="POST",
-                                         data=data):
+        if response := self.get_response(
+            "https://pk.uchet.kz/api/web/company/search/", self.__str__(), method="POST", data=data
+        ):
             company_name: Optional[str] = None
             for result in response.json()["results"]:
                 company_name = result["name"]
@@ -282,15 +301,16 @@ class UnifiedBelarusCompanies(BaseUnifiedCompanies):
 
         return checksum == int(number[-1])
 
-    def get_company_by_taxpayer_id(self, taxpayer_id: str, number_attempts: int):
+    @retry_on_failure(attempts=3, delay=5)
+    def get_company_by_taxpayer_id(self, taxpayer_id: str):
         """
 
         :param taxpayer_id:
-        :param number_attempts:
         :return:
         """
-        if response := self.get_response(f"https://www.portal.nalog.gov.by/grp/getData?unp="
-                                         f"{taxpayer_id}&charset=UTF-8&type=json", self.__str__()):
+        if response := self.get_response(
+            f"https://www.portal.nalog.gov.by/grp/getData?unp={taxpayer_id}&charset=UTF-8&type=json", self.__str__()
+        ):
             row = response.json()['row']
             data = {'unp': row['vunp'], 'company_name': row['vnaimk']}
             logger.info(f"Company name is {data['company_name']}. UNP is {taxpayer_id}")
@@ -311,14 +331,16 @@ class UnifiedUzbekistanCompanies(BaseUnifiedCompanies):
     def is_valid(self, number):
         return False if len(number) != 9 else bool(re.match(r'[3-8]', number))
 
-    def get_company_by_taxpayer_id(self, taxpayer_id: str, number_attempts: int):
+    @retry_on_failure(attempts=3, delay=5)
+    def get_company_by_taxpayer_id(self, taxpayer_id: str):
         """
 
         :param taxpayer_id:
-        :param number_attempts:
         :return:
         """
-        if response := self.get_response(f"http://orginfo.uz/en/search/all?q={taxpayer_id}", self.__str__()):
+        if response := self.get_response(
+            f"http://orginfo.uz/en/search/all?q={taxpayer_id}", self.__str__()
+        ):
             soup = BeautifulSoup(response.text, "html.parser")
             a = soup.find_all('div', class_='card-body pt-0')[-1]
             if name := a.find_next('h6', class_='card-title'):
@@ -344,7 +366,7 @@ class SearchEngineParser(BaseUnifiedCompanies):
     def is_valid(self, number: str) -> bool:
         pass
 
-    def get_company_by_taxpayer_id(self, taxpayer_id: str, number_attempts: int) -> Optional[str]:
+    def get_company_by_taxpayer_id(self, taxpayer_id: str) -> Optional[str]:
         pass
 
     def get_inn_from_site(self, dict_inn: dict, values: list, count_inn: int) -> None:
@@ -397,8 +419,10 @@ class SearchEngineParser(BaseUnifiedCompanies):
         """
         logger.info(f"Before request. Data is {value}")
         try:
-            r: Response = requests.get(f"https://xmlriver.com/search_yandex/xml?user={USER_XML_RIVER}"
-                                       f"&key={KEY_XML_RIVER}&query={value} ИНН", timeout=120)
+            r: Response = requests.get(
+                f"https://xmlriver.com/search_yandex/xml?user={USER_XML_RIVER}&key={KEY_XML_RIVER}&query={value} ИНН",
+                timeout=120
+            )
         except Exception as e:
             logger.error(f"Run time out. Data is {value}. Exception is {e}")
             raise AssertionError from e
@@ -420,24 +444,18 @@ class SearchEngineParser(BaseUnifiedCompanies):
             sentence = sentence.replace(quote, replaced_str)
         return sentence
 
-    def get_taxpayer_id(self, value: str, number_attempts: int):
+    @retry_on_failure(attempts=3, delay=5)
+    def get_taxpayer_id(self, value: str):
         """
         Getting the INN from the cache, if there is one. Otherwise, we search in the search engine.
         """
         api_inn: dict = {}
-        best_found_inn: Optional[str] = None
-        if number_attempts == 0:
-            raise
         rows: sqlite3.Cursor = self.cur.execute(f'SELECT * FROM "{self.table_name}" WHERE taxpayer_id=?', (value,), )
         if (list_rows := list(rows)) and list_rows[0][1]:
             logger.info(f"Data is {list_rows[0][0]}. INN is {list_rows[0][1]}")
             return api_inn, list_rows[0][1], True
-        try:
-            api_inn: dict = self.get_inn_from_search_engine(value)
-            best_found_inn = max(api_inn, key=api_inn.get, default=None)
-        except ConnectionRefusedError:
-            time.sleep(20)
-            self.get_taxpayer_id(value, number_attempts - 1)
+        api_inn: dict = self.get_inn_from_search_engine(value)
+        best_found_inn = max(api_inn, key=api_inn.get, default=None)
         return api_inn, best_found_inn, False
 
 
