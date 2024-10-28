@@ -449,11 +449,10 @@ class SearchEngineParser(BaseUnifiedCompanies):
         """
         Getting the INN from the cache, if there is one. Otherwise, we search in the search engine.
         """
-        api_inn: dict = {}
         rows: sqlite3.Cursor = self.cur.execute(f'SELECT * FROM "{self.table_name}" WHERE taxpayer_id=?', (value,), )
         if (list_rows := list(rows)) and list_rows[0][1]:
             logger.info(f"Data is {list_rows[0][0]}. INN is {list_rows[0][1]}")
-            return api_inn, list_rows[0][1], True
+            return {list_rows[0][1]: 1}, list_rows[0][1], True
         api_inn: dict = self.get_inn_from_search_engine(value)
         best_found_inn = max(api_inn, key=api_inn.get, default=None)
         return api_inn, best_found_inn, False

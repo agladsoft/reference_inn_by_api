@@ -198,7 +198,7 @@ class ReferenceInn(object):
         search_engine = SearchEngineParser(country, UnifiedCompaniesManager(only_russian))
         translated: Optional[str] = self.clear_symbols(sentence, only_russian)
         num_inn_in_fts: Dict[str, int] = {"num_inn_in_fts": 0, "company_inn_max_rank": 1}
-        dict_taxpayer_ids, taxpayer_id, from_cache = self.extract_taxpayer_id(search_engine, translated)
+        dict_taxpayer_ids, taxpayer_id, from_cache = search_engine.get_taxpayer_id(translated)
         countries = list({
             item
             for inn in dict_taxpayer_ids
@@ -215,18 +215,6 @@ class ReferenceInn(object):
                 num_inn_in_fts, list_inn_in_fts, translated, inn_count=0, sum_count_inn=0
             )
         self.write_existing_inn_from_fts(search_engine, index, data, list_inn_in_fts, num_inn_in_fts, from_cache)
-
-    @staticmethod
-    def extract_taxpayer_id(search_engine, translated):
-        """
-
-        :param search_engine:
-        :param translated:
-        :return:
-        """
-        # If no valid taxpayer ID found, use search engine
-        dict_taxpayer_ids, taxpayer_id, from_cache = search_engine.get_taxpayer_id(translated)
-        return dict_taxpayer_ids, taxpayer_id, from_cache
 
     def parse_all_found_inn(
             self,
