@@ -5,7 +5,7 @@ import requests
 from itertools import cycle
 from dotenv import load_dotenv
 
-COUNT_THREADS: int = 4
+COUNT_THREADS: int = 3
 TOKEN_TELEGRAM: str = "6557326533:AAHy6ls9LhTVTGztix8PUSK7BUSaHVEojXc"
 CHAT_ID: str = "-4051876751"
 USER_XML_RIVER: str = "6390"
