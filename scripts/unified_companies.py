@@ -115,7 +115,6 @@ class BaseUnifiedCompanies(abc.ABC):
         """
         Getting response from site.
         """
-        response: Optional[Response] = None
         proxy: str = next(CYCLED_PROXIES)
         used_proxy: Optional[str] = None
         try:
