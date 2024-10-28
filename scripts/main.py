@@ -1,7 +1,6 @@
 import re
 import sys
 import json
-import sqlite3
 import datetime
 import numpy as np
 import pandas as pd
@@ -11,22 +10,20 @@ from pathlib import Path
 from csv import DictWriter
 from fuzzywuzzy import fuzz
 from requests import Response
-from sqlite3 import Connection
 from pandas import DataFrame, Series
 from clickhouse_connect import get_client
 from threading import current_thread, Lock
 from pandas.io.parsers import TextFileReader
 from clickhouse_connect.driver import Client
 from concurrent.futures import ThreadPoolExecutor
+from typing import List, Union, Dict, Optional, Any
 from clickhouse_connect.driver.query import QueryResult
 from deep_translator import GoogleTranslator, exceptions
-from typing import List, Tuple, Union, Dict, Optional, Any
 from unified_companies import UnifiedCompaniesManager, SearchEngineParser
 
 
 class ReferenceInn(object):
     def __init__(self, filename, directory):
-        self.conn: Optional[Connection] = None
         self.filename: str = filename
         self.directory: str = directory
         self.russian_companies: list = []
@@ -41,7 +38,7 @@ class ReferenceInn(object):
         }
 
     @staticmethod
-    def connect_to_db() -> Tuple[Client, dict]:
+    def connect_to_db() -> dict:
         # sourcery skip: use-dictionary-union
         """
         Connecting to clickhouse.
@@ -60,7 +57,7 @@ class ReferenceInn(object):
             print(fts.result_rows[0])
             fts_recipients_inn: dict = {row[0]: row[2] for row in fts.result_rows}
             fts_senders_inn: dict = {row[1]: row[3] for row in fts.result_rows}
-            return client, {**fts_recipients_inn, **fts_senders_inn}
+            return {**fts_recipients_inn, **fts_senders_inn}
         except Exception as ex_connect:
             logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
             telegram('Отсутствует подключение к базе данных при получение данных из таблица fts')
@@ -132,7 +129,7 @@ class ReferenceInn(object):
     def get_data(
             self,
             fts: dict,
-            country: Optional[Any],
+            countries_obj: Optional[Any],
             search_engine: Any,
             data: dict,
             inn: Union[str, None],
@@ -160,7 +157,7 @@ class ReferenceInn(object):
         if not data["is_fts_found"] and not enforce_get_company:
             self.write_to_csv(index, data)
             return
-        companies = list(search_engine.manager.fetch_company_name(country, inn))
+        companies = list(search_engine.manager.fetch_company_name(countries_obj, inn))
         for company_name, country, is_cache in companies:
             if company_name is not None:
                 data["is_company_name_from_cache"] = is_cache
@@ -169,7 +166,7 @@ class ReferenceInn(object):
                 self.compare_different_fuzz(company_name, translated, data)
         logger.info(f"Data was written successfully to the dictionary. Data is {sentence}", pid=current_thread().ident)
         self.write_to_csv(index, data)
-        list_inn_in_fts.append(data.copy())
+        list_inn_in_fts.append(data)
 
     def clear_symbols(self, sentence: str, only_russian: bool) -> Optional[str]:
         """
@@ -201,40 +198,34 @@ class ReferenceInn(object):
         search_engine = SearchEngineParser(country, UnifiedCompaniesManager(only_russian))
         translated: Optional[str] = self.clear_symbols(sentence, only_russian)
         num_inn_in_fts: Dict[str, int] = {"num_inn_in_fts": 0, "company_inn_max_rank": 1}
-        dict_taxpayer_ids, taxpayer_id, from_cache = self.extract_taxpayer_id(search_engine, sentence, translated)
-        countries = list(
-            {
-                item
-                for inn in dict_taxpayer_ids
-                for item in search_engine.manager.get_valid_company(inn)
-            }
-        )
+        dict_taxpayer_ids, taxpayer_id, from_cache = self.extract_taxpayer_id(search_engine, translated)
+        countries = list({
+            item
+            for inn in dict_taxpayer_ids
+            for item in search_engine.manager.get_valid_company(inn)
+        })
         if taxpayer_id:
-            self.parse_all_found_inn(fts, dict_taxpayer_ids, taxpayer_id, countries, search_engine, data, sentence,
-                                     index, num_inn_in_fts, list_inn_in_fts, translated)
+            self.parse_all_found_inn(
+                fts, dict_taxpayer_ids, taxpayer_id, countries, search_engine,
+                data, sentence, index, num_inn_in_fts, list_inn_in_fts, translated
+            )
         else:
-            self.get_data(fts, None, search_engine, data, taxpayer_id, sentence, index, num_inn_in_fts, list_inn_in_fts,
-                          translated, inn_count=0, sum_count_inn=0)
+            self.get_data(
+                fts, None, search_engine, data.copy(), taxpayer_id, sentence, index,
+                num_inn_in_fts, list_inn_in_fts, translated, inn_count=0, sum_count_inn=0
+            )
         self.write_existing_inn_from_fts(search_engine, index, data, list_inn_in_fts, num_inn_in_fts, from_cache)
 
     @staticmethod
-    def extract_taxpayer_id(search_engine, sentence, translated):
+    def extract_taxpayer_id(search_engine, translated):
         """
 
         :param search_engine:
-        :param sentence:
         :param translated:
         :return:
         """
-        dict_taxpayer_ids: dict = {}
-        # all_digits = re.findall(r"\d+", sentence)
-
-        # for item_inn in all_digits:
-        #     if list(search_engine.manager.get_valid_company(item_inn)):
-        #         return dict_taxpayer_ids, item_inn, None
-
         # If no valid taxpayer ID found, use search engine
-        dict_taxpayer_ids, taxpayer_id, from_cache = search_engine.get_taxpayer_id(translated, 3)
+        dict_taxpayer_ids, taxpayer_id, from_cache = search_engine.get_taxpayer_id(translated)
         return dict_taxpayer_ids, taxpayer_id, from_cache
 
     def parse_all_found_inn(
@@ -242,7 +233,7 @@ class ReferenceInn(object):
             fts: dict,
             dict_taxpayer_ids: dict,
             taxpayer_id: str,
-            country: Optional[Any],
+            countries: Optional[Any],
             search_engine: Any,
             data: dict,
             sentence: str,
@@ -256,12 +247,15 @@ class ReferenceInn(object):
         """
         sum_count_inn: int = sum(dict_taxpayer_ids.values())
         for inn, inn_count in dict_taxpayer_ids.items():
-            self.get_data(fts, country, search_engine, data, inn, sentence, index, num_inn_in_fts, list_inn_in_fts,
-                          translated, inn_count=inn_count, sum_count_inn=sum_count_inn,  enforce_get_company=True)
+            self.get_data(
+                fts, countries, search_engine, data.copy(), inn, sentence, index, num_inn_in_fts, list_inn_in_fts,
+                translated, inn_count=inn_count, sum_count_inn=sum_count_inn,  enforce_get_company=True
+            )
         if not list_inn_in_fts:
-            self.get_data(fts, country, search_engine, data, taxpayer_id, sentence, index, num_inn_in_fts,
-                          list_inn_in_fts, translated, inn_count=0, sum_count_inn=sum_count_inn,
-                          enforce_get_company=True)
+            self.get_data(
+                fts, countries, search_engine, data.copy(), taxpayer_id, sentence, index, num_inn_in_fts,
+                list_inn_in_fts, translated, inn_count=0, sum_count_inn=sum_count_inn, enforce_get_company=True
+            )
 
     def write_existing_inn_from_fts(
             self,
@@ -281,16 +275,21 @@ class ReferenceInn(object):
             if dict_inn["is_fts_found"]:
                 self.append_data(dict_inn)
                 if not from_cache:
-                    search_engine.cache_add_and_save(dict_inn["company_name_rus"], dict_inn["company_inn"],
-                                                     dict_inn["country"])
+                    search_engine.cache_add_and_save(
+                        dict_inn["company_name_rus"],
+                        dict_inn["company_inn"],
+                        dict_inn["country"]
+                    )
                 return
-
         # If no valid INNs found, use the one with the highest company_inn_count or fallback to data
         max_dict_inn = max(list_inn_in_fts, key=lambda x: x["company_inn_count"], default=data)
         self.append_data(max_dict_inn)
         if not from_cache:
-            search_engine.cache_add_and_save(max_dict_inn["company_name_rus"], max_dict_inn["company_inn"],
-                                             max_dict_inn.get("country"))
+            search_engine.cache_add_and_save(
+                max_dict_inn["company_name_rus"],
+                max_dict_inn["company_inn"],
+                max_dict_inn.get("country")
+            )
 
     @staticmethod
     def join_fts(
@@ -458,8 +457,9 @@ class ReferenceInn(object):
         Check whether there is enough money in the wallet to process the current file.
         """
         try:
-            response_balance: Response = requests.get(f"https://xmlriver.com/api/get_balance/yandex/"
-                                                      f"?user={USER_XML_RIVER}&key={KEY_XML_RIVER}")
+            response_balance: Response = requests.get(
+                f"https://xmlriver.com/api/get_balance/yandex/?user={USER_XML_RIVER}&key={KEY_XML_RIVER}"
+            )
             response_balance.raise_for_status()
             balance: float = float(response_balance.text)
             if 200.0 > balance >= 100.0:
@@ -531,7 +531,6 @@ class ReferenceInn(object):
                    f"Кол-во строк, где значение company_name_unified = Null : {not_unified}\n\n"
                    f"Кол-во строк, где значение is_fts_found = Null : {self.telegram.get('is_fts_found')}\n\n"
                    f"Ошибки при обработке данных :\n{errors_}")
-
         telegram(message)
 
     def main(self):
@@ -546,11 +545,8 @@ class ReferenceInn(object):
         )
         logger.info("The script has started its work")
         logger.info(f'File is {os.path.basename(self.filename)}')
-        self.create_file_for_cache()
-        path: str = self.create_file_for_cache()
-        self.conn: Connection = sqlite3.connect(path, check_same_thread=False)
         not_parsed_data: List[dict] = self.convert_csv_to_dict()
-        client_clickhouse, fts_results = self.connect_to_db()
+        fts_results = self.connect_to_db()
         retry_queue: Queue = Queue()
         start_time: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.is_enough_money_to_search_engine()
