@@ -278,7 +278,7 @@ class ReferenceInn(object):
                     search_engine.cache_add_and_save(
                         dict_inn["company_name_rus"],
                         dict_inn["company_inn"],
-                        dict_inn["country"]
+                        dict_inn.get("country")
                     )
                 return
         # If no valid INNs found, use the one with the highest company_inn_count or fallback to data
