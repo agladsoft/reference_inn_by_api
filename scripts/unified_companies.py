@@ -92,7 +92,7 @@ class BaseUnifiedCompanies(abc.ABC):
         """
         Creating a file for recording INN caches and sentence.
         """
-        path_cache: str = f"{os.environ.get('XL_IDP_ROOT_UNZIPPING')}/cache/cache.db"
+        path_cache: str = f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/cache/cache.db"
         fle: Path = Path(path_cache)
         if not os.path.exists(os.path.dirname(fle)):
             os.makedirs(os.path.dirname(fle))
