@@ -16,7 +16,7 @@ from threading import current_thread, Lock
 from pandas.io.parsers import TextFileReader
 from clickhouse_connect.driver import Client
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Union, Dict, Optional, Any
+from typing import List, Union, Dict, Optional, Any, Tuple
 from clickhouse_connect.driver.query import QueryResult
 from deep_translator import GoogleTranslator, exceptions
 from unified_companies import UnifiedCompaniesManager, SearchEngineParser
@@ -38,7 +38,7 @@ class ReferenceInn(object):
         }
 
     @staticmethod
-    def connect_to_db() -> dict:
+    def connect_to_db() -> Tuple[Client, dict]:
         # sourcery skip: use-dictionary-union
         """
         Connecting to clickhouse.
@@ -57,7 +57,7 @@ class ReferenceInn(object):
             print(fts.result_rows[0])
             fts_recipients_inn: dict = {row[0]: row[2] for row in fts.result_rows}
             fts_senders_inn: dict = {row[1]: row[3] for row in fts.result_rows}
-            return {**fts_recipients_inn, **fts_senders_inn}
+            return client, {**fts_recipients_inn, **fts_senders_inn}
         except Exception as ex_connect:
             logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
             telegram('Отсутствует подключение к базе данных при получение данных из таблица fts')
@@ -504,16 +504,20 @@ class ReferenceInn(object):
                     only_russian=only_russian
                 )
 
-    def send_message(self):
+    def send_message(self, client: Client) -> None:
         """
         Sending a message to the telegram.
         """
         logger.info('Составление сообщения для отправки ботом')
         not_unified = self.telegram.get("all_company") - self.telegram.get("company_name_unified")
         errors_ = '\n\n'.join(set(ERRORS)) if self.telegram.get('is_fts_found') else ''
+        count_companies_upload: int = client.query(
+            f"SELECT COUNT(*) FROM default.reference_inn "
+            f"WHERE original_file_name='{os.path.basename(self.filename)}'"
+        ).result_rows[0][0]
         message = (f"Завершена обработка файла: {self.filename.split('/')[-1]}.\n\n"
                    f"Кол-во строк в файле : {self.telegram.get('all_company')}.\n\n"
-                   f"Кол-во строк в базе: {self.telegram.get('all_company')}.\n\n"
+                   f"Кол-во строк в базе: {count_companies_upload}.\n\n"
                    f"Кол-во строк, где значение company_name_unified = НЕ Null : "
                    f"{self.telegram.get('company_name_unified')}\n\n"
                    f"Кол-во строк, где значение company_name_unified = Null : {not_unified}\n\n"
@@ -534,24 +538,26 @@ class ReferenceInn(object):
         logger.info("The script has started its work")
         logger.info(f'File is {os.path.basename(self.filename)}')
         not_parsed_data: List[dict] = self.convert_csv_to_dict()
-        fts_results = self.connect_to_db()
+        client, fts_results = self.connect_to_db()
         retry_queue: Queue = Queue()
         start_time: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.is_enough_money_to_search_engine()
         self.start_multiprocessing(retry_queue, not_parsed_data, fts_results, start_time)
-        logger.info(f"All rows have been processed. Is the queue empty? {retry_queue.empty()}",
-                    pid=current_thread().ident)
+        logger.info(
+            f"All rows have been processed. Is the queue empty? {retry_queue.empty()}", pid=current_thread().ident
+        )
         self.start_multiprocessing_with_queue(retry_queue, not_parsed_data, fts_results, start_time)
         unknown_companies = self.unknown_companies.copy()
         self.unknown_companies = []
         self.start_multiprocessing(retry_queue, unknown_companies, fts_results, start_time, only_russian=False)
-        self.start_multiprocessing_with_queue(retry_queue, unknown_companies, fts_results, start_time,
-                                              only_russian=False)
+        self.start_multiprocessing_with_queue(
+            retry_queue, unknown_companies, fts_results, start_time, only_russian=False
+        )
         self.write_to_json()
         logger.info("Push data to db")
         self.push_data_to_db(start_time)
         logger.info("The script has completed its work")
-        self.send_message()
+        self.send_message(client)
 
 
 if __name__ == "__main__":
