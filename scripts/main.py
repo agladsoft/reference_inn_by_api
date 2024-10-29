@@ -264,8 +264,8 @@ class ReferenceInn(object):
                 self.append_data(dict_inn)
                 if not from_cache:
                     search_engine.cache_add_and_save(
-                        dict_inn["company_name_rus"],
-                        dict_inn["company_inn"],
+                        dict_inn.get("company_name_rus"),
+                        dict_inn.get("company_inn"),
                         dict_inn.get("country")
                     )
                 return
@@ -274,8 +274,8 @@ class ReferenceInn(object):
         self.append_data(max_dict_inn)
         if not from_cache:
             search_engine.cache_add_and_save(
-                max_dict_inn["company_name_rus"],
-                max_dict_inn["company_inn"],
+                max_dict_inn.get("company_name_rus"),
+                max_dict_inn.get("company_inn"),
                 max_dict_inn.get("country")
             )
 
@@ -556,6 +556,7 @@ class ReferenceInn(object):
         self.write_to_json()
         logger.info("Push data to db")
         self.push_data_to_db(start_time)
+        time.sleep(120)
         logger.info("The script has completed its work")
         self.send_message(client)
 

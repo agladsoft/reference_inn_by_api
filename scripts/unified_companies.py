@@ -67,8 +67,10 @@ class UnifiedCompaniesManager:
                 (taxpayer_id, str(country_obj),),
             ).fetchall():
                 yield rows[0][1], rows[0][2], True
-            else:
+            elif country_obj.is_valid(taxpayer_id):
                 yield country_obj.get_company_by_taxpayer_id(taxpayer_id), str(country_obj), False
+            else:
+                yield None, None, False
 
 
 class BaseUnifiedCompanies(abc.ABC):
