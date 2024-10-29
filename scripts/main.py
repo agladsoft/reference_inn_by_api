@@ -150,8 +150,7 @@ class ReferenceInn(object):
                     pid=current_thread().ident)
         data["company_inn"] = inn
         data["sum_count_inn"] = sum_count_inn
-        self.join_fts(fts, data, inn, inn_count, num_inn_in_fts, translated)
-        data['company_name_rus'] = translated
+        self.join_fts(fts, data, inn, inn_count, num_inn_in_fts)
         data["company_inn_max_rank"] = num_inn_in_fts["company_inn_max_rank"]
         num_inn_in_fts["company_inn_max_rank"] += 1
         if not data["is_fts_found"] and not enforce_get_company:
@@ -197,6 +196,8 @@ class ReferenceInn(object):
         country: Optional[List[object]] = []
         search_engine = SearchEngineParser(country, UnifiedCompaniesManager(only_russian))
         translated: Optional[str] = self.clear_symbols(sentence, only_russian)
+        data["request_to_yandex"] = f"{translated} ИНН"
+        data['company_name_rus'] = translated
         num_inn_in_fts: Dict[str, int] = {"num_inn_in_fts": 0, "company_inn_max_rank": 1}
         dict_taxpayer_ids, taxpayer_id, from_cache = search_engine.get_taxpayer_id(translated)
         countries = list({
@@ -285,13 +286,11 @@ class ReferenceInn(object):
             data: dict,
             inn: Union[str, None],
             inn_count: int,
-            num_inn_in_fts: Dict[str, int],
-            translated: str
+            num_inn_in_fts: Dict[str, int]
     ) -> None:
         """
         Join FTS for checking INN.
         """
-        data["request_to_yandex"] = f"{translated} ИНН"
         data['company_inn_count'] = inn_count
         data["is_fts_found"] = False
         data["fts_company_name"] = None
