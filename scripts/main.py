@@ -264,8 +264,8 @@ class ReferenceInn(object):
                 self.append_data(dict_inn)
                 if not from_cache:
                     search_engine.cache_add_and_save(
-                        dict_inn["company_name_rus"],
-                        dict_inn["company_inn"],
+                        dict_inn.get("company_name_rus"),
+                        dict_inn.get("company_inn"),
                         dict_inn.get("country")
                     )
                 return
@@ -274,8 +274,8 @@ class ReferenceInn(object):
         self.append_data(max_dict_inn)
         if not from_cache:
             search_engine.cache_add_and_save(
-                max_dict_inn["company_name_rus"],
-                max_dict_inn["company_inn"],
+                max_dict_inn.get("company_name_rus"),
+                max_dict_inn.get("company_inn"),
                 max_dict_inn.get("country")
             )
 
