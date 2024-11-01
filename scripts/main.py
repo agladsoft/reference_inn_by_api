@@ -16,9 +16,9 @@ from threading import current_thread, Lock
 from pandas.io.parsers import TextFileReader
 from clickhouse_connect.driver import Client
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Union, Dict, Optional, Any, Tuple
 from clickhouse_connect.driver.query import QueryResult
 from deep_translator import GoogleTranslator, exceptions
+from typing import List, Union, Dict, Optional, Any, Tuple
 from unified_companies import UnifiedCompaniesManager, SearchEngineParser
 
 
@@ -509,7 +509,7 @@ class ReferenceInn(object):
         """
         logger.info('Составление сообщения для отправки ботом')
         not_unified = self.telegram.get("all_company") - self.telegram.get("company_name_unified")
-        errors_ = '\n\n'.join(set(ERRORS)) if self.telegram.get('is_fts_found') else ''
+        errors_ = '\n\n'.join(set(ERRORS)) if self.unknown_companies else ''
         count_companies_upload: int = client.query(
             f"SELECT COUNT(*) FROM default.reference_inn "
             f"WHERE original_file_name='{os.path.basename(self.filename)}'"
@@ -521,6 +521,7 @@ class ReferenceInn(object):
                    f"{self.telegram.get('company_name_unified')}\n\n"
                    f"Кол-во строк, где значение company_name_unified = Null : {not_unified}\n\n"
                    f"Кол-во строк, где значение is_fts_found = Null : {self.telegram.get('is_fts_found')}\n\n"
+                   f"Кол-во строк, где страна была не найдена : {len(self.unknown_companies)}\n\n"
                    f"Ошибки при обработке данных :\n{errors_}")
         telegram(message)
 
