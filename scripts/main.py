@@ -533,6 +533,7 @@ class ReferenceInn(object):
                    f"Кол-во строк, где is_fts_found НЕ нашлось: {self.telegram.get('is_fts_found')}\n\n"
                    f"Кол-во строк, где country НЕ была найдена: {len(self.unknown_companies)}\n\n"
                    f"Ошибки при обработке данных:\n{errors_}")
+        logger.info(message)
         telegram(message)
 
     def main(self):
