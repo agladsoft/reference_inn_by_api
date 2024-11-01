@@ -521,7 +521,7 @@ class ReferenceInn(object):
                    f"{self.telegram.get('company_name_unified')}\n\n"
                    f"Кол-во строк, где значение company_name_unified = Null : {not_unified}\n\n"
                    f"Кол-во строк, где значение is_fts_found = Null : {self.telegram.get('is_fts_found')}\n\n"
-                   f"Кол-во строк, где страна была не найдена : {len(self.unknown_companies)}\n\n"
+                   f"Кол-во строк, где страна не была найдена : {len(self.unknown_companies)}\n\n"
                    f"Ошибки при обработке данных :\n{errors_}")
         telegram(message)
 
