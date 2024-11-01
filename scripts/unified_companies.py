@@ -415,6 +415,7 @@ class SearchEngineParser(BaseUnifiedCompanies):
             self.get_inn_from_site(dict_inn, inn_text, count_inn)
             self.get_inn_from_site(dict_inn, inn_title, count_inn)
 
+    @retry_on_failure(attempts=3, delay=5)
     def get_inn_from_search_engine(self, value: str) -> dict:
         """
         Looking for the INN in the search engine, and then we parse through the sites.
@@ -446,7 +447,6 @@ class SearchEngineParser(BaseUnifiedCompanies):
             sentence = sentence.replace(quote, replaced_str)
         return sentence
 
-    @retry_on_failure(attempts=3, delay=5)
     def get_taxpayer_id(self, value: str):
         """
         Getting the INN from the cache, if there is one. Otherwise, we search in the search engine.
@@ -456,7 +456,7 @@ class SearchEngineParser(BaseUnifiedCompanies):
             logger.info(f"Data is {list_rows[0][0]}. INN is {list_rows[0][1]}")
             return {list_rows[0][1]: 1}, list_rows[0][1], True
         api_inn: dict = self.get_inn_from_search_engine(value)
-        best_found_inn = max(api_inn, key=api_inn.get, default=None)
+        best_found_inn = max(api_inn, key=api_inn.get, default=None) if isinstance(api_inn, dict) else None
         return api_inn, best_found_inn, False
 
 
