@@ -212,7 +212,7 @@ class ReferenceInn(object):
             )
         else:
             self.get_data(
-                fts, None, search_engine, data.copy(), taxpayer_id, sentence, index,
+                fts, None, search_engine, data, taxpayer_id, sentence, index,
                 num_inn_in_fts, list_inn_in_fts, translated, inn_count=0, sum_count_inn=0
             )
         self.write_existing_inn_from_fts(search_engine, index, data, list_inn_in_fts, num_inn_in_fts, from_cache)
@@ -242,7 +242,7 @@ class ReferenceInn(object):
             )
         if not list_inn_in_fts:
             self.get_data(
-                fts, countries, search_engine, data.copy(), taxpayer_id, sentence, index, num_inn_in_fts,
+                fts, countries, search_engine, data, taxpayer_id, sentence, index, num_inn_in_fts,
                 list_inn_in_fts, translated, inn_count=0, sum_count_inn=sum_count_inn, enforce_get_company=True
             )
 
