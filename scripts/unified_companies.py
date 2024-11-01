@@ -13,6 +13,7 @@ from requests import Response, Session
 from stdnum.util import clean, isdigits
 import xml.etree.ElementTree as ElemTree
 from typing import Union, List, Optional
+from requests.exceptions import HTTPError
 from deep_translator import GoogleTranslator
 
 
@@ -28,7 +29,7 @@ def retry_on_failure(attempts: int = 3, delay: int = 20):
                     attempt += 1
                     if attempt >= attempts:
                         logger.error(f"All {attempts} attempts failed: {e}")
-                        return None  # Возвращаем None после всех неудачных попыток
+                        raise HTTPError
                     logger.warning(
                         f"Connection failed ({e}), retrying in {delay} seconds... (Attempt {attempt}/{attempts})"
                     )
@@ -60,15 +61,27 @@ class UnifiedCompaniesManager:
                     yield unified_company
 
     @staticmethod
-    def fetch_company_name(countries, taxpayer_id):
+    def fetch_company_name(countries, taxpayer_id, index, sentence):
+        def query_database(country_obj_, taxpayer_id_):
+            """Execute a query to find company by taxpayer_id and country."""
+            query = f'SELECT * FROM "{country_obj_.table_name}" WHERE taxpayer_id=? AND country=?'
+            return country_obj_.cur.execute(query, (taxpayer_id_, str(country_obj_))).fetchall()
+
+        def handle_valid_taxpayer(country_obj_, taxpayer_id_):
+            """Retrieve company name for a valid taxpayer ID."""
+            try:
+                company = country_obj_.get_company_by_taxpayer_id(taxpayer_id_)
+                return company, str(country_obj_), False
+            except Exception as ex:
+                ERRORS.append(f'Exception: {ex}. Data: {index}, {sentence}')
+                return None, None, False
+
         for country_obj in countries:
-            if rows := country_obj.cur.execute(
-                f'SELECT * FROM "{country_obj.table_name}" WHERE taxpayer_id=? AND country=?',
-                (taxpayer_id, str(country_obj),),
-            ).fetchall():
+            rows = query_database(country_obj, taxpayer_id)
+            if rows:
                 yield rows[0][1], rows[0][2], True
             elif country_obj.is_valid(taxpayer_id):
-                yield country_obj.get_company_by_taxpayer_id(taxpayer_id), str(country_obj), False
+                yield handle_valid_taxpayer(country_obj, taxpayer_id)
             else:
                 yield None, None, False
 
@@ -456,7 +469,7 @@ class SearchEngineParser(BaseUnifiedCompanies):
             logger.info(f"Data is {list_rows[0][0]}. INN is {list_rows[0][1]}")
             return {list_rows[0][1]: 1}, list_rows[0][1], True
         api_inn: dict = self.get_inn_from_search_engine(value)
-        best_found_inn = max(api_inn, key=api_inn.get, default=None) if isinstance(api_inn, dict) else None
+        best_found_inn = max(api_inn, key=api_inn.get, default=None)
         return api_inn, best_found_inn, False
 
 

@@ -156,7 +156,7 @@ class ReferenceInn(object):
         if not data["is_fts_found"] and not enforce_get_company:
             self.write_to_csv(index, data)
             return
-        companies = list(search_engine.manager.fetch_company_name(countries_obj, inn))
+        companies = list(search_engine.manager.fetch_company_name(countries_obj, inn, index, data.get("company_name")))
         for company_name, country, is_cache in companies:
             if company_name is not None:
                 data["is_company_name_from_cache"] = is_cache
@@ -372,7 +372,7 @@ class ReferenceInn(object):
                          f"Data is {sentence}", pid=current_thread().ident)
             retry_queue.put(index)
         else:
-            ERRORS.append(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}')
+            ERRORS.append(f'Exception: {ex_full}. Data: {index}, {sentence}')
             data_queue: dict = not_parsed_data[index - 2]
             self.write_to_csv(index, data_queue)
             self.append_data(data_queue)
@@ -461,8 +461,13 @@ class ReferenceInn(object):
             logger_stream.error("ошибка_при_получении_баланса_яндекса")
             sys.exit(1)
 
-    def start_multiprocessing_with_queue(self, retry_queue: Queue, not_parsed_data: List[dict],
-                                         fts_results: dict, start_time: str, only_russian: bool = True) -> None:
+    def start_multiprocessing_with_queue(
+            self, retry_queue: Queue,
+            not_parsed_data: List[dict],
+            fts_results: dict,
+            start_time: str,
+            only_russian: bool = True
+    ) -> None:
         """
         Starting queue processing using a multithreading.
         """
@@ -485,8 +490,14 @@ class ReferenceInn(object):
                         only_russian=only_russian
                     )
 
-    def start_multiprocessing(self, retry_queue: Queue, not_parsed_data: List[dict], fts_results: dict,
-                              start_time: str, only_russian: bool = True) -> None:
+    def start_multiprocessing(
+            self,
+            retry_queue: Queue,
+            not_parsed_data: List[dict],
+            fts_results: dict,
+            start_time: str,
+            only_russian: bool = True
+    ) -> None:
         """
         Starting processing using a multithreading.
         """
@@ -515,14 +526,13 @@ class ReferenceInn(object):
             f"WHERE original_file_name='{os.path.basename(self.filename)}'"
         ).result_rows[0][0]
         message = (f"Завершена обработка файла: {self.filename.split('/')[-1]}.\n\n"
-                   f"Кол-во строк в файле : {self.telegram.get('all_company')}.\n\n"
-                   f"Кол-во строк в базе: {count_companies_upload}.\n\n"
-                   f"Кол-во строк, где значение company_name_unified = НЕ Null : "
-                   f"{self.telegram.get('company_name_unified')}\n\n"
-                   f"Кол-во строк, где значение company_name_unified = Null : {not_unified}\n\n"
-                   f"Кол-во строк, где значение is_fts_found = Null : {self.telegram.get('is_fts_found')}\n\n"
-                   f"Кол-во строк, где страна была не найдена : {len(self.unknown_companies)}\n\n"
-                   f"Ошибки при обработке данных :\n{errors_}")
+                   f"Кол-во строк в файле: {self.telegram.get('all_company')}\n\n"
+                   f"Кол-во строк в базе: {count_companies_upload}\n\n"
+                   f"Кол-во строк, где company_name_unified нашлось: {self.telegram.get('company_name_unified')}\n\n"
+                   f"Кол-во строк, где company_name_unified НЕ нашлось: {not_unified}\n\n"
+                   f"Кол-во строк, где is_fts_found НЕ нашлось: {self.telegram.get('is_fts_found')}\n\n"
+                   f"Кол-во строк, где country НЕ была найдена: {len(self.unknown_companies)}\n\n"
+                   f"Ошибки при обработке данных:\n{errors_}")
         telegram(message)
 
     def main(self):
