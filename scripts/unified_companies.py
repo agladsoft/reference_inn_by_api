@@ -29,7 +29,7 @@ def retry_on_failure(attempts: int = 3, delay: int = 20):
                     attempt += 1
                     if attempt >= attempts:
                         logger.error(f"All {attempts} attempts failed: {e}")
-                        raise HTTPError
+                        raise HTTPError(e)
                     logger.warning(
                         f"Connection failed ({e}), retrying in {delay} seconds... (Attempt {attempt}/{attempts})"
                     )
