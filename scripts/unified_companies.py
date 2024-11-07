@@ -74,6 +74,7 @@ class UnifiedCompaniesManager:
                 return company, str(country_obj_), False
             except Exception as ex:
                 ERRORS.append(f'Exception: {ex}. Data: {index}, {sentence}')
+                logger.error(f"Exception: {ex}. Data: {index}, {sentence}")
                 return None, None, False
 
         for country_obj in countries:
