@@ -147,7 +147,7 @@ class BaseUnifiedCompanies(abc.ABC):
             return response
         except requests.exceptions.RequestException as e:
             logger.error(f"An error occurred during the API request - {e}. Proxy - {used_proxy}")
-            raise requests.exceptions.RequestException from e
+            raise e
 
     def cache_add_and_save(self, taxpayer_id: str, company_name: str, country: Union[str, list]) -> None:
         """
