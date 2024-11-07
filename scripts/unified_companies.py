@@ -442,7 +442,7 @@ class SearchEngineParser(BaseUnifiedCompanies):
             )
         except Exception as e:
             logger.error(f"Run time out. Data is {value}. Exception is {e}")
-            raise AssertionError from e
+            raise e
         logger.info(f"After request. Data is {value}")
         dict_inn: dict = {}
         count_inn: int = 1
