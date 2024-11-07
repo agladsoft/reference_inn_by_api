@@ -373,6 +373,7 @@ class ReferenceInn(object):
             retry_queue.put(index)
         else:
             ERRORS.append(f'Exception: {ex_full}. Data: {index}, {sentence}')
+            logger.error(f"Exception: {ex_full}. Data: {index}, {sentence}")
             data_queue: dict = not_parsed_data[index - 2]
             self.write_to_csv(index, data_queue)
             self.append_data(data_queue)
