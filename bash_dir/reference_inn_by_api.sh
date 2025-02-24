@@ -28,42 +28,17 @@ do
 	mime_type=$(file -b --mime-type "$file")
   echo "'${file} - ${mime_type}'"
 
-  csv_name="${csv_path}/$(basename "${file}").csv"
-
-  if [[ ${mime_type} = "application/vnd.ms-excel" ]]
-  then
-    echo "Will convert XLS '${file}' to CSV '${csv_name}'"
-    in2csv -f xls "${file}" > "${csv_name}"
-  elif [[ ${mime_type} = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ]]
-  then
-    echo "Will convert XLSX or XLSM '${file}' to CSV '${csv_name}'"
-    in2csv -f xlsx "${file}" > "${csv_name}"
-  else
-    echo "ERROR: unsupported format ${mime_type}"
-    mv "${file}" "${xls_path}/error_$(basename "${file}")"
-    continue
-  fi
-
-  if [ $? -eq 0 ]
-	then
-	  mv "${file}" "${done_path}"
-	else
-	  mv "${file}" "${xls_path}/error_$(basename "${file}")"
-	  echo "ERROR during convertion ${file} to csv!"
-	  continue
-	fi
-
 	# Will convert csv to json
-	exit_message=$(python3 ${XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS}/scripts/main.py "${csv_name}" "${json_path}" 2>&1 > /dev/null)
+	exit_message=$(python3 "${XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS}/scripts/main.py" "${file}" "${json_path}" 2>&1 > /dev/null)
 
   exit_code=$?
   echo "Exit code ${exit_code}"
   echo "Exit message ${exit_message}"
   if [[ ${exit_code} == 0 ]]
 	then
-	  mv "${csv_name}" "${done_path}"
+	  mv "${file}" "${done_path}"
 	else
-    mv "${csv_name}" "${xls_path}/error_${exit_message}_$(basename "${csv_name}")"
+    mv "${file}" "${xls_path}/error_${exit_message}_$(basename "${file}")"
 	fi
 
 done

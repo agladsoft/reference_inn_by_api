@@ -1,21 +1,23 @@
 import os
+import sys
 import time
 import logging
 import requests
 from itertools import cycle
 from dotenv import load_dotenv
+from logging.handlers import RotatingFileHandler
+
+load_dotenv()
+# os.environ["XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS"] = "."
 
 COUNT_THREADS: int = 3
-TOKEN_TELEGRAM: str = "6557326533:AAHy6ls9LhTVTGztix8PUSK7BUSaHVEojXc"
-CHAT_ID: str = "-4051876751"
 USER_XML_RIVER: str = "6390"
 KEY_XML_RIVER: str = "e3b3ac2908b2a9e729f1671218c85e12cfe643b0"
 IP_ADDRESS_DADATA: str = "service_inn"
-
-TOKEN_DADATA = "baf71b4b95c986ce9148c24f5aa251d94cd9d850"
+LOG_FORMAT: str = "[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s"
+DATE_FTM: str = "%d/%B/%Y %H:%M:%S"
 
 REPLACED_QUOTES: list = ["<", ">", "«", "»", "’", "‘", "“", "”", "`", "'", '"']
-
 REPLACED_WORDS: list = ["ООО", "OOO", "OОO", "ОOО", "OOО", "ООO", "ОАО", "ИП", "ЗАО", "3АО", "АО"]
 
 MESSAGE_TEMPLATE: dict = {
@@ -23,13 +25,11 @@ MESSAGE_TEMPLATE: dict = {
     '110': "There are no free channels for data collection. Index is {}. Exception - {}. Value - {}",
     '15': "No results found in the search engine. Index is {}. Exception - {}. Value - {}"
 }
-
 PREFIX_TEMPLATE: dict = {
     '200': "закончились_деньги_на_строке_",
     '110': "нет_свободных_каналов_на_строке_",
     '15': "не_найдено_результатов_"
 }
-
 ERRORS = []
 
 
@@ -48,29 +48,14 @@ PROXIES: list = [
 CYCLED_PROXIES: cycle = cycle(PROXIES)
 
 
+class MissingEnvironmentVariable(Exception):
+    pass
+
+
 class CustomAdapter(logging.LoggerAdapter):
     def process(self, msg, kwargs):
         my_context = kwargs.pop('pid', self.extra['pid'])
         return f'[{my_context}] {msg}', kwargs
-
-
-if not os.path.exists(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging"):
-    os.mkdir(f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging")
-
-logger: logging.getLogger = logging.getLogger("file_handler")
-if logger.hasHandlers():
-    logger.handlers.clear()
-logger = CustomAdapter(logger, {"pid": None})
-logger.setLevel(logging.INFO)
-
-console_out: logging.StreamHandler = logging.StreamHandler()
-logger_stream: logging.getLogger = logging.getLogger("stream")
-if logger_stream.hasHandlers():
-    logger_stream.handlers.clear()
-logger_stream.addHandler(console_out)
-logger_stream.setLevel(logging.INFO)
-
-load_dotenv()
 
 
 def get_my_env_var(var_name: str) -> str:
@@ -80,11 +65,46 @@ def get_my_env_var(var_name: str) -> str:
         raise MissingEnvironmentVariable(f"{var_name} does not exist") from e
 
 
-class MissingEnvironmentVariable(Exception):
-    pass
+def get_file_handler(name: str) -> logging.FileHandler:
+    log_dir_name: str = f"{get_my_env_var('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging"
+    if not os.path.exists(log_dir_name):
+        os.mkdir(log_dir_name)
+    file_handler = RotatingFileHandler(
+        filename=f"{log_dir_name}/{name}.log",
+        mode='a',
+        maxBytes=10.5 * pow(1024, 2),
+        backupCount=3
+    )
+    file_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FTM))
+    return file_handler
 
 
-def telegram(message):
+def get_stream_handler():
+    stream_handler: logging.StreamHandler = logging.StreamHandler(sys.stdout)
+    stream_handler.setLevel(logging.INFO)
+    stream_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+    return stream_handler
+
+
+def get_logger(name: str) -> logging:
+    logger_: logging.Logger = logging.getLogger(name)
+
+    if logger_.hasHandlers():
+        logger_.handlers.clear()
+
+    # Добавляем обработчики до обертки в CustomAdapter
+    logger_.addHandler(get_file_handler(name))
+    logger_.addHandler(get_stream_handler())
+    logger_.setLevel(logging.INFO)
+
+    # Оборачиваем в CustomAdapter
+    return CustomAdapter(logger_, {"pid": None})
+
+
+logger: logging = get_logger(__name__)
+
+
+def send_to_telegram(message):
     chat_id = get_my_env_var('CHAT_ID')
     token = get_my_env_var('TOKEN_TELEGRAM')
     topic = get_my_env_var('TOPIC')

@@ -3,11 +3,11 @@ import abc
 import sqlite3
 import functools
 import contextlib
-from __init__ import *
 from pathlib import Path
 from functools import reduce
 from bs4 import BeautifulSoup
 from operator import add, mul
+from scripts.__init__ import *
 from stdnum.exceptions import *
 from requests import Response, Session
 from stdnum.util import clean, isdigits
@@ -18,7 +18,7 @@ from deep_translator import GoogleTranslator
 
 
 def retry_on_failure(attempts: int = 3, delay: int = 20):
-    def decorator(func):
+    def decorator(func: callable):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             attempt = 0
@@ -283,7 +283,7 @@ class UnifiedKazakhstanCompanies(BaseUnifiedCompanies):
             for result in response.json()["results"]:
                 company_name = result["name"]
                 break
-            logger.info(f"Company name is {company_name}. BIN is {taxpayer_id}")
+            logger.info(f"Company name: {company_name}. BIN: {taxpayer_id}")
             self.cache_add_and_save(taxpayer_id, company_name, self.__str__())
             return company_name
 
@@ -329,7 +329,7 @@ class UnifiedBelarusCompanies(BaseUnifiedCompanies):
         ):
             row = response.json()['row']
             data = {'unp': row['vunp'], 'company_name': row['vnaimk']}
-            logger.info(f"Company name is {data['company_name']}. UNP is {taxpayer_id}")
+            logger.info(f"Company name: {data['company_name']}. UNP: {taxpayer_id}")
             self.cache_add_and_save(taxpayer_id, data['company_name'], self.__str__())
             return data['company_name']
 
@@ -361,11 +361,11 @@ class UnifiedUzbekistanCompanies(BaseUnifiedCompanies):
             a = soup.find_all('div', class_='card-body pt-0')[-1]
             if name := a.find_next('h6', class_='card-title'):
                 name = name.text.replace('\n', '').strip()
-            logger.info(f"Company name is {name}. INN is {taxpayer_id}")
+            logger.info(f"Company name: {name}. INN: {taxpayer_id}")
             try:
                 company_name: str = GoogleTranslator(source='uz', target='ru').translate(name[:4500])
             except Exception as e:
-                logger.error(f"Exception is {e}")
+                logger.error(f"Exception: {e}")
                 company_name = name
             self.cache_add_and_save(taxpayer_id, company_name, self.__str__())
             return company_name
@@ -406,7 +406,7 @@ class SearchEngineParser(BaseUnifiedCompanies):
                                                       "Value - {}. Error code - {}")
             message = message.format(error_code.text, value, code)
             prefix: str = PREFIX_TEMPLATE.get(code, "необработанная_ошибка_на_строке_")
-            logger.error(f"Error code is {code}. Message is {message}. Prefix is {prefix}")
+            logger.error(f"Error code: {code}. Message: {message}. Prefix: {prefix}")
             if code == '200':
                 raise AssertionError(message)
             else:
@@ -434,20 +434,20 @@ class SearchEngineParser(BaseUnifiedCompanies):
         """
         Looking for the INN in the search engine, and then we parse through the sites.
         """
-        logger.info(f"Before request. Data is {value}")
+        logger.info(f"Before request. Data: {value}")
         try:
             r: Response = requests.get(
                 f"https://xmlriver.com/search_yandex/xml?user={USER_XML_RIVER}&key={KEY_XML_RIVER}&query={value} ИНН",
                 timeout=120
             )
         except Exception as e:
-            logger.error(f"Run time out. Data is {value}. Exception is {e}")
+            logger.error(f"Run time out. Data: {value}. Exception: {e}")
             raise e
-        logger.info(f"After request. Data is {value}")
+        logger.info(f"After request. Data: {value}")
         dict_inn: dict = {}
         count_inn: int = 1
         self.parse_xml(r, value, dict_inn, count_inn)
-        logger.info(f"Dictionary with INN is {dict_inn}. Data is {value}")
+        logger.info(f"Dictionary with INN: {dict_inn}. Data: {value}")
         return dict_inn
 
     @staticmethod
@@ -467,7 +467,7 @@ class SearchEngineParser(BaseUnifiedCompanies):
         """
         rows: sqlite3.Cursor = self.cur.execute(f'SELECT * FROM "{self.table_name}" WHERE taxpayer_id=?', (value,), )
         if (list_rows := list(rows)) and list_rows[0][1]:
-            logger.info(f"Data is {list_rows[0][0]}. INN is {list_rows[0][1]}")
+            logger.info(f"Data: {list_rows[0][0]}. INN: {list_rows[0][1]}")
             return {list_rows[0][1]: 1}, list_rows[0][1], True
         api_inn: dict = self.get_inn_from_search_engine(value)
         best_found_inn = max(api_inn, key=api_inn.get, default=None)

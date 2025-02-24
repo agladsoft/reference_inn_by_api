@@ -1,25 +1,23 @@
 import re
-import sys
 import json
 import datetime
 import numpy as np
 import pandas as pd
-from __init__ import *
 from queue import Queue
 from pathlib import Path
 from csv import DictWriter
 from fuzzywuzzy import fuzz
 from requests import Response
+from scripts.__init__ import *
 from pandas import DataFrame, Series
 from clickhouse_connect import get_client
 from threading import current_thread, Lock
-from pandas.io.parsers import TextFileReader
 from clickhouse_connect.driver import Client
 from concurrent.futures import ThreadPoolExecutor
 from clickhouse_connect.driver.query import QueryResult
 from deep_translator import GoogleTranslator, exceptions
 from typing import List, Union, Dict, Optional, Any, Tuple
-from unified_companies import UnifiedCompaniesManager, SearchEngineParser
+from scripts.unified_companies import UnifiedCompaniesManager, SearchEngineParser
 
 
 class ReferenceInn(object):
@@ -31,23 +29,25 @@ class ReferenceInn(object):
         self.unknown_companies: list = []
         self.lock: Lock = Lock()
         self.telegram: Dict[str, Optional[int, str]] = {
-            'company_name_unified': 0,
-            'is_fts_found': 0,
-            'all_company': 0,
-            'errors': []
+            "company_name_unified": 0,
+            "is_fts_found": 0,
+            "all_company": 0,
+            "errors": []
         }
 
     @staticmethod
     def connect_to_db() -> Tuple[Client, dict]:
-        # sourcery skip: use-dictionary-union
         """
         Connecting to clickhouse.
         :return: Client ClickHouse.
         """
         try:
-            client: Client = get_client(host=get_my_env_var('HOST'), database=get_my_env_var('DATABASE'),
-                                        username=get_my_env_var('USERNAME_DB'), password=get_my_env_var('PASSWORD'))
-            logger.info("Successfully connect to db")
+            client: Client = get_client(
+                host=get_my_env_var('HOST'),
+                database=get_my_env_var('DATABASE'),
+                username=get_my_env_var('USERNAME_DB'),
+                password=get_my_env_var('PASSWORD')
+            )
             fts: QueryResult = client.query(
                 "SELECT recipients_tin, senders_tin, name_of_the_recipient, senders_name "
                 "FROM fts "
@@ -55,14 +55,14 @@ class ReferenceInn(object):
             )
             # Чтобы проверить, есть ли данные. Так как переменная образуется, но внутри нее могут быть ошибки.
             print(fts.result_rows[0])
+            logger.info("Successfully connected to db")
             fts_recipients_inn: dict = {row[0]: row[2] for row in fts.result_rows}
             fts_senders_inn: dict = {row[1]: row[3] for row in fts.result_rows}
             return client, {**fts_recipients_inn, **fts_senders_inn}
         except Exception as ex_connect:
-            logger.error(f"Error connection to db {ex_connect}. Type error is {type(ex_connect)}.")
-            telegram('Отсутствует подключение к базе данных при получение данных из таблица fts')
-            print("error_connect_db", file=sys.stderr)
-            sys.exit(1)
+            logger.error(f"Error connection to db {ex_connect}. Type error: {type(ex_connect)}.")
+            send_to_telegram('Отсутствует подключение к базе данных при получение данных из таблица fts')
+            raise SystemExit("отсутствует_подключение_к_базе") from ex_connect
 
     def push_data_to_db(self, start_time_script: str):
         """
@@ -78,7 +78,7 @@ class ReferenceInn(object):
             df = df.replace({np.nan: None, "NaT": None})
             client.insert_df("reference_inn_all", df, database="default")
         except Exception as ex:
-            logger.error(f"Error is {ex}")
+            logger.error(f"Error: {ex}")
 
     @staticmethod
     def replace_forms_organizations(company_name: str) -> str:
@@ -127,27 +127,29 @@ class ReferenceInn(object):
             self.foreign_companies.append(data)
 
     def get_data(
-            self,
-            fts: dict,
-            countries_obj: Optional[Any],
-            search_engine: Any,
-            data: dict,
-            inn: Union[str, None],
-            sentence: str,
-            index: int,
-            num_inn_in_fts: dict,
-            list_inn_in_fts: list,
-            translated: Optional[str] = None,
-            inn_count: int = 1,
-            sum_count_inn: int = 1,
-            enforce_get_company: bool = False
+        self,
+        fts: dict,
+        countries_obj: Optional[Any],
+        search_engine: Any,
+        data: dict,
+        inn: Union[str, None],
+        sentence: str,
+        index: int,
+        num_inn_in_fts: dict,
+        list_inn_in_fts: list,
+        translated: Optional[str] = None,
+        inn_count: int = 1,
+        sum_count_inn: int = 1,
+        enforce_get_company: bool = False
     ) -> None:
         """
         We get a unified company name from the sentence itself for the found INN. And then we are looking for a company
         on the website https://www.rusprofile.ru/.
         """
-        logger.info(f"The processing and filling of data into the dictionary has begun. Data is {sentence}",
-                    pid=current_thread().ident)
+        logger.info(
+            f"The processing and filling of data into the dictionary has begun. Data: {sentence}",
+            pid=current_thread().ident
+        )
         data["company_inn"] = inn
         data["sum_count_inn"] = sum_count_inn
         self.join_fts(fts, data, inn, inn_count, num_inn_in_fts)
@@ -163,11 +165,11 @@ class ReferenceInn(object):
                 data["company_name_unified"] = company_name
                 data["country"] = country
                 self.compare_different_fuzz(company_name, translated, data)
-        logger.info(f"Data was written successfully to the dictionary. Data is {sentence}", pid=current_thread().ident)
+        logger.info(f"Data was written successfully to the dictionary. Data: {sentence}", pid=current_thread().ident)
         self.write_to_csv(index, data)
         list_inn_in_fts.append(data)
 
-    def clear_symbols(self, sentence: str, only_russian: bool) -> Optional[str]:
+    def translate_sentence(self, sentence: str, only_russian: bool) -> Optional[str]:
         """
         Getting translated sentence.
         """
@@ -176,8 +178,8 @@ class ReferenceInn(object):
             sentence: str = sentence.translate({ord(c): " " for c in r".,!@#$%^&*()[]{};?\|~=_+"})
             sentence = self.replace_quotes(sentence, replaced_str=' ')
             sentence = re.sub(" +", " ", sentence).strip() + sign
-            logger.info(f"Try translate sentence to russian. Data is {sentence}", pid=current_thread().ident)
-            sentence: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500])
+            logger.info(f"Try translate sentence to russian. Data: {sentence}", pid=current_thread().ident)
+            sentence: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500]) or ""
             sentence = self.replace_quotes(sentence, quotes=['"', '«', '»', sign], replaced_str=' ')
         sentence: str = sentence.translate({ord(c): " " for c in r"+"})
         return re.sub(" +", " ", sentence).strip()
@@ -194,11 +196,11 @@ class ReferenceInn(object):
         """
         list_inn_in_fts: List[dict] = []
         country: Optional[List[object]] = []
-        search_engine = SearchEngineParser(country, UnifiedCompaniesManager(only_russian))
-        translated: Optional[str] = self.clear_symbols(sentence, only_russian)
+        translated: Optional[str] = self.translate_sentence(sentence, only_russian)
         data["request_to_yandex"] = f"{translated} ИНН"
         data['company_name_rus'] = translated
         num_inn_in_fts: Dict[str, int] = {"num_inn_in_fts": 0, "company_inn_max_rank": 1}
+        search_engine = SearchEngineParser(country, UnifiedCompaniesManager(only_russian))
         dict_taxpayer_ids, taxpayer_id, from_cache = search_engine.get_taxpayer_id(translated)
         countries = list({
             item
@@ -218,18 +220,18 @@ class ReferenceInn(object):
         self.write_existing_inn_from_fts(search_engine, index, data, list_inn_in_fts, num_inn_in_fts, from_cache)
 
     def parse_all_found_inn(
-            self,
-            fts: dict,
-            dict_taxpayer_ids: dict,
-            taxpayer_id: str,
-            countries: Optional[Any],
-            search_engine: Any,
-            data: dict,
-            sentence: str,
-            index: int,
-            num_inn_in_fts: dict,
-            list_inn_in_fts: list,
-            translated: str
+        self,
+        fts: dict,
+        dict_taxpayer_ids: dict,
+        taxpayer_id: str,
+        countries: Optional[Any],
+        search_engine: Any,
+        data: dict,
+        sentence: str,
+        index: int,
+        num_inn_in_fts: dict,
+        list_inn_in_fts: list,
+        translated: str
     ) -> None:
         """
         We extract data on all found INN from Yandex.
@@ -247,18 +249,18 @@ class ReferenceInn(object):
             )
 
     def write_existing_inn_from_fts(
-            self,
-            search_engine,
-            index: int,
-            data: dict,
-            list_inn_in_fts: list,
-            num_inn_in_fts: dict,
-            from_cache: bool
+        self,
+        search_engine,
+        index: int,
+        data: dict,
+        list_inn_in_fts: list,
+        num_inn_in_fts: dict,
+        from_cache: bool
     ) -> None:
         """
         Write data inn in files.
         """
-        logger.info(f"Check company_name in FTS. Index is {index}. Data is {data}", pid=current_thread().ident)
+        logger.info(f"Check company_name in FTS. Index: {index}. Data: {data}", pid=current_thread().ident)
         for dict_inn in list_inn_in_fts:
             dict_inn["count_inn_in_fts"] = num_inn_in_fts["num_inn_in_fts"]
             if dict_inn["is_fts_found"]:
@@ -282,11 +284,11 @@ class ReferenceInn(object):
 
     @staticmethod
     def join_fts(
-            fts: dict,
-            data: dict,
-            inn: Union[str, None],
-            inn_count: int,
-            num_inn_in_fts: Dict[str, int]
+        fts: dict,
+        data: dict,
+        inn: Union[str, None],
+        inn_count: int,
+        num_inn_in_fts: Dict[str, int]
     ) -> None:
         """
         Join FTS for checking INN.
@@ -312,13 +314,16 @@ class ReferenceInn(object):
         Writing data to csv.
         """
         basename: str = os.path.basename(self.filename)
-        output_file_path: str = os.path.join(f"{os.path.dirname(self.directory)}/csv",
-                                             f'{data["original_file_parsed_on"]}_{basename}')
+        output_file_path: str = os.path.join(
+            f"{os.path.dirname(self.directory)}/csv",
+            f'{data["original_file_parsed_on"]}_{basename}'
+        )
+        os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
         if os.path.exists(output_file_path):
             self.to_csv(output_file_path, data, 'a')
         else:
             self.to_csv(output_file_path, data, 'w')
-        logger.info(f"Data was written successfully to the file. Index is {index}", pid=current_thread().ident)
+        logger.info(f"Data was written successfully to the file. Index: {index}", pid=current_thread().ident)
 
     def count_to_telegram(self, data: List[dict]) -> None:
         """
@@ -356,20 +361,22 @@ class ReferenceInn(object):
         self.write_to_file(output_file_path_unknown, self.unknown_companies)
 
     def add_index_in_queue(
-            self,
-            not_parsed_data: List[dict],
-            retry_queue: Queue,
-            is_queue: bool,
-            sentence: str,
-            index: int,
-            ex_full: Exception
+        self,
+        not_parsed_data: List[dict],
+        retry_queue: Queue,
+        is_queue: bool,
+        sentence: str,
+        index: int,
+        ex_full: Exception
     ) -> None:
         """
         Adding an index to the queue or writing empty data.
         """
         if not is_queue:
-            logger.error(f"An error occurred in which the processor was added to the queue. Index is {index}. "
-                         f"Data is {sentence}", pid=current_thread().ident)
+            logger.error(
+                f"An error occurred in which the processor was added to the queue. Index: {index}. "
+                f"Data: {sentence}", pid=current_thread().ident
+            )
             retry_queue.put(index)
         else:
             ERRORS.append(f'Exception: {ex_full}. Data: {index}, {sentence}')
@@ -385,15 +392,15 @@ class ReferenceInn(object):
         data['original_file_parsed_on'] = start_time_script
 
     def parse_data(
-            self,
-            not_parsed_data: List[dict],
-            index: int,
-            data: dict,
-            fts: dict,
-            start_time_script,
-            retry_queue: Queue,
-            is_queue: bool = False,
-            only_russian: bool = True
+        self,
+        not_parsed_data: List[dict],
+        index: int,
+        data: dict,
+        fts: dict,
+        start_time_script,
+        retry_queue: Queue,
+        is_queue: bool = False,
+        only_russian: bool = True
     ) -> None:
         """
         Processing each row.
@@ -403,15 +410,14 @@ class ReferenceInn(object):
         try:
             self.unify_companies(sentence, data, index, fts, only_russian)
         except (IndexError, ValueError, TypeError) as ex:
-            logger.error(f'Not found inn INN Yandex. Data is {index, sentence} (most likely a foreign company). '
-                         f'Exception - {ex}. Type error - {type(ex)}', pid=current_thread().ident)
-            logger_stream.error(f'Not found INN in Yandex. Data is {index, sentence} '
-                                f'(most likely a foreign company). Exception - {ex}. Type error - {type(ex)}')
+            logger.error(
+                f'Not found inn INN Yandex. Data: {index, sentence} (most likely a foreign company). '
+                f'Exception - {ex}. Type error - {type(ex)}', pid=current_thread().ident
+            )
             self.write_to_csv(index, data)
             self.append_data(data)
         except Exception as ex_full:
-            logger.error(f'Unknown errors. Exception is {ex_full}. Data is {index, sentence}',
-                         pid=current_thread().ident)
+            logger.error(f'Unknown errors. Exception: {ex_full}. Data: {index, sentence}', pid=current_thread().ident)
             self.add_index_in_queue(not_parsed_data, retry_queue, is_queue, sentence, index, ex_full)
 
     @staticmethod
@@ -426,12 +432,12 @@ class ReferenceInn(object):
         fle.touch(exist_ok=True)
         return path_cache
 
-    def convert_csv_to_dict(self) -> List[dict]:
+    def convert_file_to_dict(self) -> List[dict]:
         """
         Csv data representation in json.
         """
-        dataframe: Union[TextFileReader, DataFrame] = pd.read_csv(self.filename, dtype=str)
-        dataframe.dropna(inplace=True)
+        dataframe: DataFrame = pd.read_excel(self.filename, dtype=str)
+        dataframe = dataframe.dropna()
         self.telegram['all_company'] += len(dataframe)
         series: Series = dataframe.iloc[:, 0]
         dataframe = series.to_frame(name="company_name")
@@ -451,30 +457,29 @@ class ReferenceInn(object):
             response_balance.raise_for_status()
             balance: float = float(response_balance.text)
             if 200.0 > balance >= 100.0:
-                telegram(message=f"Баланс в Яндекс кошельке сейчас составляет {balance} рублей.")
+                send_to_telegram(message=f"Баланс в Яндекс кошельке сейчас составляет {balance} рублей.")
             elif balance < 100.0:
-                telegram(message='Баланс в Яндекс кошельке меньше 100 рублей. Пополните, пожалуйста, счет.')
+                send_to_telegram(message='Баланс в Яндекс кошельке меньше 100 рублей. Пополните, пожалуйста, счет.')
                 logger.error("There is not enough money to process all the lines. Please top up your account")
-                logger_stream.error("не_хватает_денег_для_обработки_файла")
-                sys.exit(1)
-        except requests.exceptions.RequestException as e:
-            logger.error(f"An error occurred while receiving data from xmlriver. Exception is {e}")
-            logger_stream.error("ошибка_при_получении_баланса_яндекса")
-            sys.exit(1)
+                raise SystemExit("не_хватает_денег_для_обработки_файла")
+        except Exception as e:
+            logger.error(f"An error occurred while receiving data from xmlriver. Exception: {e}")
+            raise SystemExit("ошибка_при_получении_баланса_яндекса") from e
 
     def start_multiprocessing_with_queue(
-            self, retry_queue: Queue,
-            not_parsed_data: List[dict],
-            fts_results: dict,
-            start_time: str,
-            only_russian: bool = True
+        self,
+        retry_queue: Queue,
+        not_parsed_data: List[dict],
+        fts_results: dict,
+        start_time: str,
+        only_russian: bool = True
     ) -> None:
         """
         Starting queue processing using a multithreading.
         """
         if not retry_queue.empty():
             time.sleep(120)
-            logger.info(f"Processing of processes that are in the queue. Size queue is {retry_queue.qsize()}",
+            logger.info(f"Processing of processes that are in the queue. Size queue: {retry_queue.qsize()}",
                         pid=current_thread().ident)
             with ThreadPoolExecutor(max_workers=COUNT_THREADS) as executor:
                 for _ in range(retry_queue.qsize()):
@@ -492,12 +497,12 @@ class ReferenceInn(object):
                     )
 
     def start_multiprocessing(
-            self,
-            retry_queue: Queue,
-            not_parsed_data: List[dict],
-            fts_results: dict,
-            start_time: str,
-            only_russian: bool = True
+        self,
+        retry_queue: Queue,
+        not_parsed_data: List[dict],
+        fts_results: dict,
+        start_time: str,
+        only_russian: bool = True
     ) -> None:
         """
         Starting processing using a multithreading.
@@ -520,57 +525,76 @@ class ReferenceInn(object):
         Sending a message to the telegram.
         """
         logger.info('Составление сообщения для отправки ботом')
-        not_unified = self.telegram.get("all_company") - self.telegram.get("company_name_unified")
+        not_unified = self.telegram["all_company"] - self.telegram["company_name_unified"]
         errors_ = '\n\n'.join(set(ERRORS)) if self.unknown_companies else ''
         count_companies_upload: int = client.query(
             f"SELECT COUNT(*) FROM default.reference_inn "
             f"WHERE original_file_name='{os.path.basename(self.filename)}'"
         ).result_rows[0][0]
-        message = (f"Завершена обработка файла: {self.filename.split('/')[-1]}.\n\n"
-                   f"Кол-во строк в файле: {self.telegram.get('all_company')}\n\n"
-                   f"Кол-во строк в базе: {count_companies_upload}\n\n"
-                   f"Кол-во строк, где company_name_unified нашлось: {self.telegram.get('company_name_unified')}\n\n"
-                   f"Кол-во строк, где company_name_unified НЕ нашлось: {not_unified}\n\n"
-                   f"Кол-во строк, где is_fts_found НЕ нашлось: {self.telegram.get('is_fts_found')}\n\n"
-                   f"Кол-во строк, где country НЕ была найдена: {len(self.unknown_companies)}\n\n"
-                   f"Ошибки при обработке данных:\n{errors_}")
+        message: str = (
+            f"Завершена обработка файла: {self.filename.split('/')[-1]}.\n\n"
+            f"Кол-во строк в файле: {self.telegram['all_company']}\n\n"
+            f"Кол-во строк в базе: {count_companies_upload}\n\n"
+            f"Кол-во строк, где company_name_unified нашлось: {self.telegram['company_name_unified']}\n\n"
+            f"Кол-во строк, где company_name_unified НЕ нашлось: {not_unified}\n\n"
+            f"Кол-во строк, где is_fts_found НЕ нашлось: {self.telegram['is_fts_found']}\n\n"
+            f"Кол-во строк, где country НЕ была найдена: {len(self.unknown_companies)}\n\n"
+            f"Ошибки при обработке данных:\n{errors_}"
+        )
         logger.info(message)
-        telegram(message)
+        send_to_telegram(message)
 
-    def main(self):
+    def _process_data_with_multiprocessing(
+        self,
+        retry_queue: Queue,
+        data: List[dict],
+        fts_results: dict,
+        start_time: str,
+        only_russian: bool = True
+    ):
+        """
+        Runs multiprocessing for the given data.
+        """
+        self.start_multiprocessing(retry_queue, data, fts_results, start_time, only_russian)
+        self.start_multiprocessing_with_queue(retry_queue, data, fts_results, start_time, only_russian)
+
+    def main(self) -> None:
         """
         The main method that runs the code.
         """
         logging.basicConfig(
-            filename=f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging/"
-                     f"{datetime.datetime.now().date()}_{os.path.basename(self.filename)}.log",
-            format="[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s",
-            datefmt="%d/%B/%Y %H:%M:%S"
+            filename=(
+                f"{get_my_env_var('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/logging/"
+                f"{datetime.datetime.now().date()}_{os.path.basename(self.filename)}.log"
+            )
         )
-        logger.info("The script has started its work")
-        logger.info(f'File is {os.path.basename(self.filename)}')
-        not_parsed_data: List[dict] = self.convert_csv_to_dict()
+        logger.info(f"The script has started its work. File: {os.path.basename(self.filename)}")
         client, fts_results = self.connect_to_db()
-        retry_queue: Queue = Queue()
+        not_parsed_data: List[dict] = self.convert_file_to_dict()
         start_time: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        retry_queue: Queue = Queue()
+
         self.is_enough_money_to_search_engine()
-        self.start_multiprocessing(retry_queue, not_parsed_data, fts_results, start_time)
+        self._process_data_with_multiprocessing(retry_queue, not_parsed_data, fts_results, start_time)
+
         logger.info(
             f"All rows have been processed. Is the queue empty? {retry_queue.empty()}", pid=current_thread().ident
         )
-        self.start_multiprocessing_with_queue(retry_queue, not_parsed_data, fts_results, start_time)
-        unknown_companies = self.unknown_companies.copy()
+
+        unknown_companies: List[dict] = self.unknown_companies.copy()
         self.unknown_companies = []
-        self.start_multiprocessing(retry_queue, unknown_companies, fts_results, start_time, only_russian=False)
-        self.start_multiprocessing_with_queue(
+
+        # Повторная обработка ненайденных компаний
+        self._process_data_with_multiprocessing(
             retry_queue, unknown_companies, fts_results, start_time, only_russian=False
         )
+
         self.write_to_json()
         logger.info("Push data to db")
         self.push_data_to_db(start_time)
         time.sleep(300)
-        logger.info("The script has completed its work")
         self.send_message(client)
+        logger.info(f"The script has completed its work. File: {os.path.basename(self.filename)}")
 
 
 if __name__ == "__main__":
