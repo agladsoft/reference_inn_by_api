@@ -13,7 +13,6 @@ from requests import Response, Session
 from stdnum.util import clean, isdigits
 import xml.etree.ElementTree as ElemTree
 from requests.exceptions import HTTPError
-from deep_translator import GoogleTranslator
 from typing import Union, List, Optional, Any, Generator
 
 
@@ -34,6 +33,7 @@ def retry_on_failure(attempts: int = 3, delay: int = 20):
                         f"Connection failed ({e}), retrying in {delay} seconds... (Attempt {attempt}/{attempts})"
                     )
                     time.sleep(delay)
+            return None
         return wrapper
     return decorator
 
@@ -244,6 +244,7 @@ class UnifiedRussianCompanies(BaseUnifiedCompanies):
             company_name = data[0][0].get('value')
             self.cache_add_and_save(taxpayer_id, company_name, self.__str__())
             return company_name
+        return None
 
 
 class UnifiedKazakhstanCompanies(BaseUnifiedCompanies):
@@ -297,6 +298,7 @@ class UnifiedKazakhstanCompanies(BaseUnifiedCompanies):
             logger.info(f"Company name: {company_name}. BIN: {taxpayer_id}")
             self.cache_add_and_save(taxpayer_id, company_name, self.__str__())
             return company_name
+        return None
 
 
 class UnifiedBelarusCompanies(BaseUnifiedCompanies):
@@ -348,6 +350,7 @@ class UnifiedBelarusCompanies(BaseUnifiedCompanies):
             logger.info(f"Company name: {data['company_name']}. UNP: {taxpayer_id}")
             self.cache_add_and_save(taxpayer_id, data['company_name'], self.__str__())
             return data['company_name']
+        return None
 
 
 class UnifiedUzbekistanCompanies(BaseUnifiedCompanies):
@@ -381,15 +384,13 @@ class UnifiedUzbekistanCompanies(BaseUnifiedCompanies):
             soup = BeautifulSoup(response.text, "html.parser")
             a = soup.find_all('div', class_='card-body pt-0')[-1]
             if name := a.find_next('h6', class_='card-title'):
-                name = name.text.replace('\n', '').strip()
-            logger.info(f"Company name: {name}. INN: {taxpayer_id}")
-            try:
-                company_name: str = GoogleTranslator(source='uz', target='ru').translate(name[:4500])
-            except Exception as e:
-                logger.error(f"Exception: {e}")
+                company_name = name.text.replace('\n', '').strip()
+            else:
                 company_name = name
+            logger.info(f"Company name: {company_name}. INN: {taxpayer_id}")
             self.cache_add_and_save(taxpayer_id, company_name, self.__str__())
             return company_name
+        return None
 
 
 class SearchEngineParser(BaseUnifiedCompanies):
@@ -423,8 +424,9 @@ class SearchEngineParser(BaseUnifiedCompanies):
         """
         if error_code.tag == 'error':
             code: Union[str, None] = error_code.attrib.get('code')
-            message: str = MESSAGE_TEMPLATE.get(code, "Not found code error. Exception - {}. "
-                                                      "Value - {}. Error code - {}")
+            message: str = MESSAGE_TEMPLATE.get(
+                code, "Not found code error. Exception - {}. Value - {}. Error code - {}"
+            )
             message = message.format(error_code.text, value, code)
             prefix: str = PREFIX_TEMPLATE.get(code, "необработанная_ошибка_на_строке_")
             logger.error(f"Error code: {code}. Message: {message}. Prefix: {prefix}")

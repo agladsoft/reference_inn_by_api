@@ -1,21 +1,63 @@
 import pytest
+import json
 from typing import Type
 from unittest.mock import Mock
 from scripts.unified_companies import *
-from requests.exceptions import HTTPError
+
+class MockResponse(Response):
+    def __init__(self, status_code: int, json_data: Optional[Union[list, dict]] = None, text: Optional[str] = None):
+        super().__init__()
+        self.status_code = status_code  # Родной атрибут Response
+
+        # Устанавливаем `_content`, чтобы `text` и `json()` работали корректно
+        if json_data is not None:
+            self._content = json.dumps(json_data).encode('utf-8')  # JSON в байты
+        elif text is not None:
+            self._content = text.encode('utf-8')  # Обычный текст в байты
+        else:
+            self._content = b''
+
+    def json(self, **kwargs):
+        try:
+            return json.loads(self.content)  # `self.content` аналогичен `requests.Response`
+        except json.JSONDecodeError as e:
+            raise ValueError("No valid JSON data provided") from e
+
+    @property
+    def text(self):
+        return self.content.decode('utf-8') if self.content else ""
 
 
-class MockResponse:
-    def __init__(self, status_code, json_data):
-        self.status_code: int = status_code
-        self.json_data: list = json_data
-
-    def json(self):
-        return self.json_data
-
-    def raise_for_status(self):
-        if self.status_code >= 400:
-            raise HTTPError(f"Mock HTTP error: {self.status_code}")
+test_sentence: str = "AFRUIT LLC, 192249, SOFIJSKAYA STR., D. 60,  LITER AM, KORPUS 8, P.KAM.3,  ST.PETERSBURG, RUSSIA"
+test_response_xml: str = (
+    "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>"
+    "<yandexsearch version=\"1.0\">"
+    "<response date=\"20250225T123714\">"
+    "<found priority=\"all\">3000000</found>"
+    "<correct>AFRUIT LLC, 192249, SOFIJSKAYA STR., D. 60, LITER AM, KORPUS 8, P.KAM.3, ST.PETERSBURG, RUSSIA ИНН</correct>"
+    "<fixtype>correct</fixtype>"
+    "<results>"
+    "<grouping>"
+    "<page first=\"1\" last=\"14\">1</page>"
+    "<group id=\"1\">"
+    "<doccount>1</doccount>"
+    "<doc>"
+    "<url>https://www.rusprofile.ru/id/1227800121779</url>"
+    "<title>ООО \"Афрут\" Санкт-Петербург (ИНН 7816734305) адрес...</title>"
+    "<contenttype>organic</contenttype>"
+    "<data_amp></data_amp>"
+    "<passages>"
+    "<passage>192249, город Санкт-Петербург, Софийская ул, д. 60 литера АМ, кор. 8 часть камеры 3.... "
+    "Генеральный директор ООО \"Афрут\" - Попова Ирина Геннадьевна (ИНН 781118914402).</passage>"
+    "</passages>"
+    "<tablesnippet></tablesnippet>"
+    "</doc>"
+    "</group>"
+    "</grouping>"
+    "</results>"
+    "</response>"
+    "</yandexsearch>"
+)
 
 
 @pytest.fixture
@@ -240,7 +282,12 @@ def test_russian_companies_validate_invalid(
         ("6319160313", 'ООО "СТРОЙСТАНДАРТ"')
     ],
 )
-def test_russian_companies_get_company_by_taxpayer_id(russian_companies, mocker, taxpayer_id, expected_company):
+def test_russian_companies_get_company_by_taxpayer_id(
+    russian_companies: UnifiedRussianCompanies,
+    mocker: Mock,
+    taxpayer_id: str,
+    expected_company: str
+) -> None:
     mock_response: MockResponse = MockResponse(
         status_code=200,
         json_data=[[{"value": expected_company, "unrestricted_value": expected_company}]]
@@ -256,7 +303,12 @@ def test_russian_companies_get_company_by_taxpayer_id(russian_companies, mocker,
         ("061040008424", 'ТОО "Альянс-Брок"')
     ],
 )
-def test_kazakhstan_companies_get_company_by_taxpayer_id(kazakhstan_companies, mocker, taxpayer_id, expected_company):
+def test_kazakhstan_companies_get_company_by_taxpayer_id(
+    kazakhstan_companies: UnifiedKazakhstanCompanies,
+    mocker: Mock,
+    taxpayer_id: str,
+    expected_company: str
+) -> None:
     mock_response = MockResponse(200, json_data={"results": [{"name": expected_company}]})
     mocker.patch('scripts.unified_companies.BaseUnifiedCompanies.get_response', return_value=mock_response)
     assert kazakhstan_companies.get_company_by_taxpayer_id(taxpayer_id) == expected_company
@@ -269,7 +321,12 @@ def test_kazakhstan_companies_get_company_by_taxpayer_id(kazakhstan_companies, m
         ("800019585", 'СООО "ЗОВ-ЛенЕВРОМЕБЕЛЬ"')
     ],
 )
-def test_belarus_companies_get_company_by_taxpayer_id(belarus_companies, mocker, taxpayer_id, expected_company):
+def test_belarus_companies_get_company_by_taxpayer_id(
+    belarus_companies: UnifiedBelarusCompanies,
+    mocker: Mock,
+    taxpayer_id: str,
+    expected_company: str
+) -> None:
     mock_response = MockResponse(200, json_data={'row': {'vunp': taxpayer_id, 'vnaimk': expected_company}})
     mocker.patch('scripts.unified_companies.BaseUnifiedCompanies.get_response', return_value=mock_response)
     assert belarus_companies.get_company_by_taxpayer_id(taxpayer_id) == expected_company
@@ -278,59 +335,101 @@ def test_belarus_companies_get_company_by_taxpayer_id(belarus_companies, mocker,
 @pytest.mark.parametrize(
     "taxpayer_id, expected_company",
     [
-        ("305900252", 'ООО "Югум-Древ"'),
-        ("309053845", 'СООО "ЗОВ-ЛенЕВРОМЕБЕЛЬ"')
+        ("305900252", '"AUTOMOTIVE AND MACHINERY SOLUTIONS" mas`uliyati cheklangan jamiyati'),
+        ("309053845", '"TOSHKENT TRAKTOR ZAVODI" mas`uliyati cheklangan jamiyati')
     ],
 )
-def test_uzbekistan_companies_get_company_by_taxpayer_id(uzbekistan_companies, mocker, taxpayer_id, expected_company):
-    mock_response = MockResponse(200, text='<div class="card-body pt-0"><h6 class="card-title">test_company_name</h6></div>')
+def test_uzbekistan_companies_get_company_by_taxpayer_id(
+    uzbekistan_companies: UnifiedUzbekistanCompanies,
+    mocker: Mock,
+    taxpayer_id: str,
+    expected_company: str
+) -> None:
+    mock_response = MockResponse(
+        status_code=200,
+        text=f'<div class="card-body pt-0"><h6 class="card-title">{expected_company}</h6></div>'
+    )
     mocker.patch('scripts.unified_companies.BaseUnifiedCompanies.get_response', return_value=mock_response)
-    mocker.patch('scripts.unified_companies.GoogleTranslator.translate', return_value="test_company_name")
-    assert uzbekistan_companies.get_company_by_taxpayer_id("123456789") == "test_company_name"
+    assert uzbekistan_companies.get_company_by_taxpayer_id(taxpayer_id) == expected_company
 
 
-# def test_search_engine_parser_replace_quotes(search_engine_parser):
-#     assert search_engine_parser.replace_quotes('test "test" test') == 'test "test" test'
-#
-#
-# def test_search_engine_parser_get_inn_from_site(search_engine_parser):
-#     dict_inn = {}
-#     search_engine_parser.get_inn_from_site(dict_inn, ["1234567890"], 1)
-#     assert dict_inn == {"1234567890": 1}
-#
-#
-# def test_search_engine_parser_get_code_error(search_engine_parser):
-#     error_code = ElemTree.fromstring('<error code="200">test error</error>')
-#     with pytest.raises(AssertionError):
-#         search_engine_parser.get_code_error(error_code, "test_value")
-#
-#     error_code = ElemTree.fromstring('<error code="400">test error</error>')
-#     with pytest.raises(ConnectionRefusedError):
-#         search_engine_parser.get_code_error(error_code, "test_value")
-#
-#
-# def test_search_engine_parser_parse_xml(search_engine_parser):
-#     dict_inn = {}
-#     response = MockResponse(200, text='<root><response><reqid>123</reqid></response><group><doc><title>test title 1234567890</title><passage>test passage 0987654321</passage></doc></group></root>')
-#     search_engine_parser.parse_xml(response, "test_value", dict_inn, 1)
-#     assert dict_inn == {"1234567890": 1, "0987654321": 1}
-#
-#
-# def test_search_engine_parser_get_inn_from_search_engine(search_engine_parser, mocker):
-#     mock_response = MockResponse(200, text='<root><response><reqid>123</reqid></response><group><doc><title>test title 1234567890</title><passage>test passage 0987654321</passage></doc></group></root>')
-#     mocker.patch('requests.get', return_value=mock_response)
-#     assert search_engine_parser.get_inn_from_search_engine("test_value") == {"1234567890": 1, "0987654321": 1}
-#
-#
-# def test_retry_on_failure(mocker):
-#     mock_func = mocker.Mock(side_effect=[Exception("Test Exception"), 123])
-#     decorated_func = retry_on_failure(attempts=2, delay=0)(mock_func)
-#     assert decorated_func() == 123
-#     assert mock_func.call_count == 2
-#
-#     mock_func = mocker.Mock(side_effect=Exception("Test Exception"))
-#     decorated_func = retry_on_failure(attempts=2, delay=0)(mock_func)
-#     with pytest.raises(HTTPError):
-#         decorated_func()
-#     assert mock_func.call_count == 2
+@pytest.mark.parametrize(
+    "sentence, expected",
+    [
+        ('test "test" test', 'test "test" test'),
+        ('test `test` test', 'test "test" test'),
+        ("test 'test' test", 'test "test" test'),
+        ('test <test> test', 'test "test" test'),
+        ('test “test” test', 'test "test" test'),
+        ('test «test» test', 'test "test" test'),
+        ('test ‘test’ test', 'test "test" test')
+    ],
+)
+def test_search_engine_parser_replace_quotes(
+    search_engine_parser: SearchEngineParser,
+    sentence: str,
+    expected: str
+) -> None:
+    assert search_engine_parser.replace_quotes(sentence) == expected
+
+
+@pytest.mark.parametrize(
+    "taxpayer_id, expected_count",
+    [
+        ("9729133245", 1),
+        ("921140000433", 1),
+        ("790973974", 1)
+        # ("305900252", 1)
+    ],
+)
+def test_search_engine_parser_get_inn_from_site(
+    search_engine_parser: SearchEngineParser,
+    taxpayer_id: str,
+    expected_count: int
+) -> None:
+    dict_inn: dict = {}
+    search_engine_parser.get_inn_from_site(dict_inn, [taxpayer_id], expected_count)
+    assert dict_inn == {taxpayer_id: expected_count}
+
+
+def test_search_engine_parser_get_code_error(search_engine_parser: SearchEngineParser) -> None:
+    error_code: ElemTree.Element = ElemTree.fromstring('<error code="200">test error</error>')
+    with pytest.raises(AssertionError):
+        search_engine_parser.get_code_error(error_code, "test_value")
+
+    error_code: ElemTree.Element = ElemTree.fromstring('<error code="400">test error</error>')
+    with pytest.raises(ConnectionRefusedError):
+        search_engine_parser.get_code_error(error_code, "test_value")
+
+
+def test_search_engine_parser_parse_xml(search_engine_parser: SearchEngineParser) -> None:
+    dict_inn: dict = {}
+    response: MockResponse = MockResponse(
+        status_code=200,
+        text=test_response_xml
+    )
+    search_engine_parser.parse_xml(response, test_sentence, dict_inn, 1)
+    assert dict_inn == {"781118914402": 1, "7816734305": 1}
+
+
+def test_search_engine_parser_get_inn_from_search_engine(
+    search_engine_parser: SearchEngineParser,
+    mocker: Mock
+) -> None:
+    mock_response: MockResponse = MockResponse(200, text=test_response_xml)
+    mocker.patch('requests.get', return_value=mock_response)
+    assert list(search_engine_parser.get_inn_from_search_engine(test_sentence)) == ['781118914402', '7816734305']
+
+
+def test_retry_on_failure(mocker):
+    mock_func = mocker.Mock(side_effect=[Exception("Test Exception"), 123])
+    decorated_func = retry_on_failure(attempts=2, delay=0)(mock_func)
+    assert decorated_func() == 123
+    assert mock_func.call_count == 2
+
+    mock_func = mocker.Mock(side_effect=Exception("Test Exception"))
+    decorated_func = retry_on_failure(attempts=2, delay=0)(mock_func)
+    with pytest.raises(HTTPError):
+        decorated_func()
+    assert mock_func.call_count == 2
 
