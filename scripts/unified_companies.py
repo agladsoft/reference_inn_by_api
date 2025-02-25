@@ -12,9 +12,9 @@ from stdnum.exceptions import *
 from requests import Response, Session
 from stdnum.util import clean, isdigits
 import xml.etree.ElementTree as ElemTree
-from typing import Union, List, Optional
 from requests.exceptions import HTTPError
 from deep_translator import GoogleTranslator
+from typing import Union, List, Optional, Any, Generator
 
 
 def retry_on_failure(attempts: int = 3, delay: int = 20):
@@ -39,7 +39,7 @@ def retry_on_failure(attempts: int = 3, delay: int = 20):
 
 
 class UnifiedCompaniesManager:
-    def __init__(self, only_russian):
+    def __init__(self, only_russian: bool):
         if only_russian:
             self.unified_companies = [
                 UnifiedRussianCompanies(),
@@ -54,35 +54,35 @@ class UnifiedCompaniesManager:
                 # UnifiedUzbekistanCompanies()
             ]
 
-    def get_valid_company(self, company_data):
+    def get_valid_company(self, company_data: str) -> Generator:
         for unified_company in self.unified_companies:
             with contextlib.suppress(Exception):
                 if unified_company.is_valid(company_data):
                     yield unified_company
 
     @staticmethod
-    def fetch_company_name(countries, taxpayer_id, index, sentence):
-        def query_database(country_obj_, taxpayer_id_):
-            """Execute a query to find company by taxpayer_id and country."""
-            query = f'SELECT * FROM "{country_obj_.table_name}" WHERE taxpayer_id=? AND country=?'
-            return country_obj_.cur.execute(query, (taxpayer_id_, str(country_obj_))).fetchall()
+    def query_database(country_obj: callable, taxpayer_id: str) -> tuple:
+        """Execute a query to find company by taxpayer_id and country."""
+        query = f'SELECT * FROM "{country_obj.table_name}" WHERE taxpayer_id=? AND country=?'
+        return country_obj.cur.execute(query, (taxpayer_id, str(country_obj))).fetchall()
 
-        def handle_valid_taxpayer(country_obj_, taxpayer_id_):
-            """Retrieve company name for a valid taxpayer ID."""
-            try:
-                company = country_obj_.get_company_by_taxpayer_id(taxpayer_id_)
-                return company, str(country_obj_), False
-            except Exception as ex:
-                ERRORS.append(f'Exception: {ex}. Data: {index}, {sentence}')
-                logger.error(f"Exception: {ex}. Data: {index}, {sentence}")
-                return None, None, False
+    @staticmethod
+    def handle_valid_taxpayer(country_obj: callable, taxpayer_id: str, index: int, sentence: str) -> tuple:
+        """Retrieve company name for a valid taxpayer ID."""
+        try:
+            company = country_obj.get_company_by_taxpayer_id(taxpayer_id)
+            return company, str(country_obj), False
+        except Exception as ex:
+            ERRORS.append(f'Exception: {ex}. Data: {index}, {sentence}')
+            logger.error(f"Exception: {ex}. Data: {index}, {sentence}")
+            return None, None, False
 
+    def fetch_company_name(self, countries: Optional[Any], taxpayer_id: str, index: int, sentence: str) -> Generator:
         for country_obj in countries:
-            rows = query_database(country_obj, taxpayer_id)
-            if rows:
+            if rows := self.query_database(country_obj, taxpayer_id):
                 yield rows[0][1], rows[0][2], True
             elif country_obj.is_valid(taxpayer_id):
-                yield handle_valid_taxpayer(country_obj, taxpayer_id)
+                yield self.handle_valid_taxpayer(country_obj, taxpayer_id, index, sentence)
             else:
                 yield None, None, False
 
@@ -118,11 +118,12 @@ class BaseUnifiedCompanies(abc.ABC):
         Loading the cache.
         """
         cur: sqlite3.Cursor = self.conn.cursor()
-        cur.execute(f"""CREATE TABLE IF NOT EXISTS {self.table_name}(
-               taxpayer_id TEXT PRIMARY KEY,
-               company_name TEXT,
-               country TEXT)
-            """)
+        cur.execute(
+            f"""CREATE TABLE IF NOT EXISTS {self.table_name}(
+            taxpayer_id TEXT PRIMARY KEY,
+            company_name TEXT,
+            country TEXT)
+        """)
         self.conn.commit()
         return cur
 
@@ -153,8 +154,10 @@ class BaseUnifiedCompanies(abc.ABC):
         """
         Saving and adding the result to the cache.
         """
-        self.cur.executemany(f"INSERT or REPLACE INTO {self.table_name} VALUES(?, ?, ?)",
-                             [(taxpayer_id, company_name, str(country))])
+        self.cur.executemany(
+            f"INSERT or REPLACE INTO {self.table_name} VALUES(?, ?, ?)",
+            [(taxpayer_id, company_name, str(country))]
+        )
         self.conn.commit()
 
 
@@ -168,53 +171,56 @@ class UnifiedRussianCompanies(BaseUnifiedCompanies):
     def __repr__(self):
         return "russia"
 
+    def __eq__(self, other: callable) -> bool:
+        return isinstance(other, UnifiedRussianCompanies)
+
     @staticmethod
-    def calc_company_check_digit(number):
+    def calc_company_check_digit(taxpayer_id: str) -> str:
         """
         Calculate the check digit for the 10-digit ??? for organisations.
-        :param number:
+        :param taxpayer_id:
         :return:
         """
-        weights = (2, 4, 10, 3, 5, 9, 4, 6, 8)
-        return str(sum(w * int(n) for w, n in zip(weights, number)) % 11 % 10)
+        weights: tuple = (2, 4, 10, 3, 5, 9, 4, 6, 8)
+        return str(sum(w * int(n) for w, n in zip(weights, taxpayer_id)) % 11 % 10)
 
     @staticmethod
-    def calc_personal_check_digits(number):
+    def calc_personal_check_digits(taxpayer_id: str) -> str:
         """"
         "Calculate the check digits for the 12-digit personal ???.
-        :param number:
+        :param taxpayer_id:
         :return:
         """
-        weights = (7, 2, 4, 10, 3, 5, 9, 4, 6, 8)
-        d1 = str(sum(w * int(n) for w, n in zip(weights, number)) % 11 % 10)
-        weights = (3, 7, 2, 4, 10, 3, 5, 9, 4, 6, 8)
-        d2 = str(sum(w * int(n) for w, n in zip(weights, number[:10] + d1)) % 11 % 10)
+        weights: tuple = (7, 2, 4, 10, 3, 5, 9, 4, 6, 8)
+        d1: str = str(sum(w * int(n) for w, n in zip(weights, taxpayer_id)) % 11 % 10)
+        weights: tuple = (3, 7, 2, 4, 10, 3, 5, 9, 4, 6, 8)
+        d2: str = str(sum(w * int(n) for w, n in zip(weights, taxpayer_id[:10] + d1)) % 11 % 10)
         return d1 + d2
 
-    def validate(self, number):
+    def validate(self, taxpayer_id: str) -> str:
         """
         Check if the number is a valid ???. This checks the length, formatting and check digit.
-        :param number:
+        :param taxpayer_id:
         :return:
         """
-        number = clean(number, ' ').strip()
-        if not isdigits(number):
+        taxpayer_id: str = clean(taxpayer_id, ' ').strip()
+        if not isdigits(taxpayer_id):
             raise InvalidFormat()
-        if len(number) == 10:
-            if self.calc_company_check_digit(number) != number[-1]:
+        if len(taxpayer_id) == 10:
+            if self.calc_company_check_digit(taxpayer_id) != taxpayer_id[-1]:
                 raise InvalidChecksum()
-        elif len(number) == 12:
+        elif len(taxpayer_id) == 12:
             # persons
-            if self.calc_personal_check_digits(number) != number[-2:]:
+            if self.calc_personal_check_digits(taxpayer_id) != taxpayer_id[-2:]:
                 raise InvalidChecksum()
         else:
             raise InvalidLength()
-        return number
+        return taxpayer_id
 
-    def is_valid(self, number):
+    def is_valid(self, taxpayer_id: str) -> bool:
         """Check if the number is a valid ???."""
         try:
-            return bool(self.validate(number))
+            return bool(self.validate(taxpayer_id))
         except ValidationError:
             return False
 
@@ -250,19 +256,24 @@ class UnifiedKazakhstanCompanies(BaseUnifiedCompanies):
     def __repr__(self):
         return "kazakhstan"
 
+    def __eq__(self, other: callable) -> bool:
+        return isinstance(other, UnifiedKazakhstanCompanies)
+
     @staticmethod
     def multiply(weights: List[int], number: str) -> int:
         return reduce(add, map(lambda i: mul(*i), zip(map(int, number), weights)))
 
-    def is_valid(self, number):
-        if len(number) != 12:
+    def is_valid(self, taxpayer_id):
+        if not isdigits(taxpayer_id):
+            return False
+        if len(taxpayer_id) != 12:
             return False
         w1 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         w2 = [3, 4, 5, 6, 7, 8, 9, 10, 11, 1, 2]
-        check_sum = self.multiply(w1, number) % 11
+        check_sum = self.multiply(w1, taxpayer_id) % 11
         if check_sum == 10:
-            check_sum = self.multiply(w2, number) % 11
-        return check_sum == int(number[-1])
+            check_sum = self.multiply(w2, taxpayer_id) % 11
+        return check_sum == int(taxpayer_id[-1])
 
     @retry_on_failure(attempts=3, delay=5)
     def get_company_by_taxpayer_id(self, taxpayer_id: str):
@@ -298,24 +309,29 @@ class UnifiedBelarusCompanies(BaseUnifiedCompanies):
     def __repr__(self):
         return "belarus"
 
-    def is_valid(self, number):
+    def __eq__(self, other: callable) -> bool:
+        return isinstance(other, UnifiedBelarusCompanies)
+
+    def is_valid(self, taxpayer_id):
         """
 
-        :param number:
+        :param taxpayer_id:
         :return:
         """
-        if len(number) != 9 or number == '000000000':
+        if not isdigits(taxpayer_id):
+            return False
+        if len(taxpayer_id) != 9 or taxpayer_id == '000000000':
             return False
 
         weights = [29, 23, 19, 17, 13, 7, 5, 3]
 
-        checksum = sum(int(d) * w for d, w in zip(number[:-1], weights))
+        checksum = sum(int(d) * w for d, w in zip(taxpayer_id[:-1], weights))
         checksum = checksum % 11
         if checksum == 10:
-            checksum = sum(int(d) * w for d, w in zip(number[:-1], weights[1:]))
+            checksum = sum(int(d) * w for d, w in zip(taxpayer_id[:-1], weights[1:]))
             checksum = checksum % 11
 
-        return checksum == int(number[-1])
+        return checksum == int(taxpayer_id[-1])
 
     @retry_on_failure(attempts=3, delay=5)
     def get_company_by_taxpayer_id(self, taxpayer_id: str):
@@ -344,8 +360,13 @@ class UnifiedUzbekistanCompanies(BaseUnifiedCompanies):
     def __repr__(self):
         return "uzbekistan"
 
-    def is_valid(self, number):
-        return False if len(number) != 9 else bool(re.match(r'[3-8]', number))
+    def __eq__(self, other: callable) -> bool:
+        return isinstance(other, UnifiedUzbekistanCompanies)
+
+    def is_valid(self, taxpayer_id):
+        if not isdigits(taxpayer_id):
+            return False
+        return False if len(taxpayer_id) != 9 else bool(re.match(r'[3-8]', taxpayer_id))
 
     @retry_on_failure(attempts=3, delay=5)
     def get_company_by_taxpayer_id(self, taxpayer_id: str):
