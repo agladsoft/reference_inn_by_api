@@ -283,9 +283,9 @@ def test_belarus_companies_get_company_by_taxpayer_id(belarus_companies, mocker,
     ],
 )
 def test_uzbekistan_companies_get_company_by_taxpayer_id(uzbekistan_companies, mocker, taxpayer_id, expected_company):
-    # mock_response = MockResponse(200, text='<div class="card-body pt-0"><h6 class="card-title">test_company_name</h6></div>')
-    # mocker.patch('scripts.unified_companies.BaseUnifiedCompanies.get_response', return_value=mock_response)
-    # mocker.patch('scripts.unified_companies.GoogleTranslator.translate', return_value="test_company_name")
+    mock_response = MockResponse(200, text='<div class="card-body pt-0"><h6 class="card-title">test_company_name</h6></div>')
+    mocker.patch('scripts.unified_companies.BaseUnifiedCompanies.get_response', return_value=mock_response)
+    mocker.patch('scripts.unified_companies.GoogleTranslator.translate', return_value="test_company_name")
     assert uzbekistan_companies.get_company_by_taxpayer_id("123456789") == "test_company_name"
 
 
