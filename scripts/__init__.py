@@ -72,7 +72,7 @@ def get_file_handler(name: str) -> logging.FileHandler:
     file_handler = RotatingFileHandler(
         filename=f"{log_dir_name}/{name}.log",
         mode='a',
-        maxBytes=10.5 * pow(1024, 2),
+        maxBytes=10 * pow(1024, 2),
         backupCount=3
     )
     file_handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=DATE_FTM))

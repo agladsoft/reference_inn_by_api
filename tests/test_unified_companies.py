@@ -287,8 +287,8 @@ def test_uzbekistan_companies_get_company_by_taxpayer_id(uzbekistan_companies, m
     # mocker.patch('scripts.unified_companies.BaseUnifiedCompanies.get_response', return_value=mock_response)
     # mocker.patch('scripts.unified_companies.GoogleTranslator.translate', return_value="test_company_name")
     assert uzbekistan_companies.get_company_by_taxpayer_id("123456789") == "test_company_name"
-#
-#
+
+
 # def test_search_engine_parser_replace_quotes(search_engine_parser):
 #     assert search_engine_parser.replace_quotes('test "test" test') == 'test "test" test'
 #
