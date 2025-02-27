@@ -84,6 +84,10 @@ class MissingEnvironmentVariable(Exception):
     pass
 
 
+TOKEN_YANDEX = get_my_env_var('TOKEN_BEARER')
+FOLDER_YANDEX = get_my_env_var('FOLDER')
+
+
 def telegram(message):
     chat_id = get_my_env_var('CHAT_ID')
     token = get_my_env_var('TOKEN_TELEGRAM')
