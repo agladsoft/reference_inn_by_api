@@ -27,12 +27,14 @@ class YandexTranslator(TranslatorStrategy):
     URL = "https://translate.api.cloud.yandex.net/translate/v2/translate"
 
     def translate(self, text: str, source_lang: str = "en", target_lang: str = "ru") -> str:
-        headers = {"Authorization": f"Bearer {TOKEN_YANDEX}"}
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Api-Key {TOKEN_API_YANDEX}"
+        }
         data = {
-            "folderId": FOLDER_YANDEX,
-            "texts": [text],
-            "sourceLanguageCode": source_lang,
-            "targetLanguageCode": target_lang
+            "sourceLanguageCode": "en",
+            "targetLanguageCode": "ru",
+            "texts": [text]
         }
         response_data = self.get_response(self.URL, headers=headers, data=data)
 
