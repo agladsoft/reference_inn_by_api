@@ -32,8 +32,8 @@ class YandexTranslator(TranslatorStrategy):
             "Authorization": f"Api-Key {TOKEN_API_YANDEX}"
         }
         data = {
-            "sourceLanguageCode": "en",
-            "targetLanguageCode": "ru",
+            "sourceLanguageCode": source_lang,
+            "targetLanguageCode": target_lang,
             "texts": [text]
         }
         response_data = self.get_response(self.URL, headers=headers, data=data)
