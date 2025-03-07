@@ -5,7 +5,7 @@ import requests
 from itertools import cycle
 from dotenv import load_dotenv
 
-os.environ["XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS"] = os.path.dirname(os.path.abspath(__file__))
+# os.environ["XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS"] = os.path.dirname(os.path.abspath(__file__))
 
 COUNT_THREADS: int = 3
 TOKEN_TELEGRAM: str = "6557326533:AAHy6ls9LhTVTGztix8PUSK7BUSaHVEojXc"
