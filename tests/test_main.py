@@ -1,4 +1,7 @@
 import os
+
+os.environ["XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS"] = "."
+
 import csv
 import pytest
 import requests
@@ -302,9 +305,11 @@ def test_get_data(
         ("ООО Тестовая компания", None, None)
     ],
 )
-@patch("deep_translator.GoogleTranslator")
+@patch("scripts.translate.YandexTranslatorAdapter.translate")
+@patch("scripts.translate.GoogleTranslatorAdapter.translate")
 def test_compare_different_fuzz(
-    mock_translate: Mock,
+    mock_google_translate: Mock,  # Первый patch (Google)
+    mock_yandex_translate: Mock,  # Второй patch (Yandex)
     reference_inn_instance: ReferenceInn,
     company_name: str,
     translated: str,
@@ -312,7 +317,8 @@ def test_compare_different_fuzz(
 ) -> None:
     # Arrange
     data: dict = {}
-    mock_translate.return_value = "Test Company"
+    mock_google_translate.return_value = "Test Company"
+    mock_yandex_translate.return_value = "Test Company"
 
     # Act
     reference_inn_instance.compare_different_fuzz(company_name, translated, data)

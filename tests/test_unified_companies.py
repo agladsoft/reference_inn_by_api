@@ -1,5 +1,9 @@
-import pytest
+import os
+
+os.environ["XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS"] = "."
+
 import json
+import pytest
 from typing import Type
 from unittest.mock import Mock
 from scripts.unified_companies import *

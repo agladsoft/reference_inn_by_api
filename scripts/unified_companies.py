@@ -262,7 +262,7 @@ class UnifiedKazakhstanCompanies(BaseUnifiedCompanies):
 
     @staticmethod
     def multiply(weights: List[int], number: str) -> int:
-        return reduce(add, map(lambda i: mul(*i), zip(map(int, number), weights)))
+        return reduce(add, map(lambda i: mul(*i), zip(map(int, number), weights))) # type: ignore
 
     def is_valid(self, taxpayer_id):
         if not isdigits(taxpayer_id):

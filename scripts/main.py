@@ -10,12 +10,13 @@ from fuzzywuzzy import fuzz
 from requests import Response
 from scripts.__init__ import *
 from pandas import DataFrame, Series
+from deep_translator import exceptions
 from clickhouse_connect import get_client
 from threading import current_thread, Lock
 from clickhouse_connect.driver import Client
+from scripts.translate import TranslatorFactory
 from concurrent.futures import ThreadPoolExecutor
 from clickhouse_connect.driver.query import QueryResult
-from deep_translator import GoogleTranslator, exceptions
 from typing import List, Union, Dict, Optional, Any, Tuple
 from scripts.unified_companies import UnifiedCompaniesManager, SearchEngineParser
 
@@ -109,7 +110,8 @@ class ReferenceInn(object):
             company_name = self.replace_forms_organizations(company_name)
             fuzz_company_name: int = fuzz.partial_ratio(company_name.upper(), translated.upper())
             try:
-                company_name_en: str = GoogleTranslator(source='ru', target='en').translate(company_name[:4500])
+                translator = TranslatorFactory.get_translator('yandex')
+                company_name_en: str = translator.translate(company_name[:4500], source_lang='ru', target_lang='en')
             except exceptions.NotValidPayload:
                 company_name_en = company_name
             fuzz_company_name_two: int = fuzz.partial_ratio(company_name_en.upper(), translated.upper())
@@ -179,7 +181,8 @@ class ReferenceInn(object):
             sentence = self.replace_quotes(sentence, replaced_str=' ')
             sentence = re.sub(" +", " ", sentence).strip() + sign
             logger.info(f"Try translate sentence to russian. Data: {sentence}", pid=current_thread().ident)
-            sentence: str = GoogleTranslator(source='en', target='ru').translate(sentence[:4500]) or ""
+            translator = TranslatorFactory().get_translator('yandex')
+            sentence: str = translator.translate(sentence[:4500], source_lang='en', target_lang='ru') or ""
             sentence = self.replace_quotes(sentence, quotes=['"', '«', '»', sign], replaced_str=' ')
         sentence: str = sentence.translate({ord(c): " " for c in r"+"})
         return re.sub(" +", " ", sentence).strip()
@@ -304,7 +307,7 @@ class ReferenceInn(object):
     def to_csv(self, output_file_path: str, data: dict, operator: str):
         with self.lock:
             with open(output_file_path, operator) as csvfile:
-                writer = DictWriter(csvfile, fieldnames=list(data.keys()))
+                writer = DictWriter(csvfile, fieldnames=list(data.keys())) # type: ignore
                 if operator == 'w':
                     writer.writeheader()
                 writer.writerow(data)

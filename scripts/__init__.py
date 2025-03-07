@@ -102,6 +102,7 @@ def get_logger(name: str) -> logging:
 
 
 logger: logging = get_logger(__name__)
+TOKEN_API_YANDEX: str = get_my_env_var('TOKEN_API_YANDEX')
 
 
 def send_to_telegram(message):
