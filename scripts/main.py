@@ -702,7 +702,7 @@ class ReferenceInn(object):
         return dataframe.to_dict('records')
 
     @staticmethod
-    def is_enough_money_to_search_engine():
+    def is_enough_money_to_search_engine() -> None:
         """
         Checks if there is enough money in the Yandex wallet to process all the lines.
 
