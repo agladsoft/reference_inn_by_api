@@ -97,7 +97,13 @@ class UnifiedCompaniesManager:
         return country_obj.cur.execute(query, (taxpayer_id, str(country_obj))).fetchall()
 
     @staticmethod
-    def handle_valid_taxpayer(country_obj: callable, taxpayer_id: str, index: int, sentence: str) -> tuple:
+    def handle_valid_taxpayer(
+        country_obj: callable,
+        taxpayer_id: str,
+        index: int,
+        sentence: str,
+        errors: list
+    ) -> tuple:
         """
         Attempt to retrieve and return the company name for a given taxpayer ID using a specific country object.
 
@@ -111,18 +117,26 @@ class UnifiedCompaniesManager:
         :param taxpayer_id: The taxpayer ID for which to retrieve the company name.
         :param index: The index used for logging purposes, typically indicating position in a dataset.
         :param sentence: The sentence or context in which the taxpayer ID is being processed.
+        :param errors: A list to append error information to.
         :return: A tuple containing the company name (or None if not found), the string representation of the
                  country object (or None in case of an error), and a boolean indicating the success of the operation.
         """
         try:
-            company = country_obj.get_company_by_taxpayer_id(taxpayer_id)
+            company: Optional[str] = country_obj.get_company_by_taxpayer_id(taxpayer_id)
             return company, str(country_obj), False
         except Exception as ex:
-            ERRORS.append(f'Exception: {ex}. Data: {index}, {sentence}')
+            errors.append(f'Exception: {ex}. Data: {index}, {sentence}')
             logger.error(f"Exception: {ex}. Data: {index}, {sentence}")
             return None, None, False
 
-    def fetch_company_name(self, countries: Optional[Any], taxpayer_id: str, index: int, sentence: str) -> Generator:
+    def fetch_company_name(
+        self,
+        countries: Optional[Any],
+        taxpayer_id: str,
+        index: int,
+        sentence: str,
+        errors: list
+    ) -> Generator:
         """
         Generator to fetch company names from the database or through a unified company object.
 
@@ -138,6 +152,7 @@ class UnifiedCompaniesManager:
         :param taxpayer_id: The taxpayer ID for which to retrieve the company name.
         :param index: The index used for logging purposes, typically indicating position in a dataset.
         :param sentence: The sentence or context in which the taxpayer ID is being processed.
+        :param errors: A list to append error information to.
         :return: A generator yielding tuples containing the company name (or None if not found), the string
                  representation of the country object (or None in case of an error), and a boolean indicating
                  the success of the operation.
@@ -146,7 +161,7 @@ class UnifiedCompaniesManager:
             if rows := self.query_database(country_obj, taxpayer_id):
                 yield rows[0][1], rows[0][2], True
             elif country_obj.is_valid(taxpayer_id):
-                yield self.handle_valid_taxpayer(country_obj, taxpayer_id, index, sentence)
+                yield self.handle_valid_taxpayer(country_obj, taxpayer_id, index, sentence, errors)
             else:
                 yield None, None, False
 

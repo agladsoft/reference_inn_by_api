@@ -30,7 +30,6 @@ PREFIX_TEMPLATE: dict = {
     '110': "нет_свободных_каналов_на_строке_",
     '15': "не_найдено_результатов_"
 }
-ERRORS = []
 
 
 PROXIES: list = [
@@ -105,23 +104,29 @@ logger: logging = get_logger(__name__)
 TOKEN_API_YANDEX: str = get_my_env_var('TOKEN_API_YANDEX')
 
 
-def send_to_telegram(message):
-    chat_id = get_my_env_var('CHAT_ID')
-    token = get_my_env_var('TOKEN_TELEGRAM')
-    topic = get_my_env_var('TOPIC')
-    message_id = get_my_env_var('ID')
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
+def send_to_telegram(message: str) -> None:
+    chat_id: str = get_my_env_var('CHAT_ID')
+    token: str = get_my_env_var('TOKEN_TELEGRAM')
+    topic: str = get_my_env_var('TOPIC')
+    message_id: str = get_my_env_var('ID')
+    url: str = f"https://api.telegram.org/bot{token}/sendMessage"
     logger.info("Отправка сообщения в телеграмм")
     if len(message) < 4095:
-        params = {"chat_id": f"{chat_id}/{topic}", "text": message,
-                  'reply_to_message_id': message_id}  # Добавляем /2 для указания второго подканала
-        response = requests.get(url, params=params)
+        params: dict = {
+            "chat_id": f"{chat_id}/{topic}",
+            "text": message,
+            "reply_to_message_id": message_id
+        }  # Добавляем /2 для указания второго подканала
+        response: requests.Response = requests.get(url, params=params)
         logger.info(response)
     else:
         for n, x in enumerate(range(0, len(message), 4095), 1):
-            m = message[x:x + 4095]
-            params = {"chat_id": f"{chat_id}/{topic}", "text": m,
-                      'reply_to_message_id': message_id}  # Добавляем /2 для указания второго подканала
-            response = requests.get(url, params=params)
+            m: str = message[x:x + 4095]
+            params: dict = {
+                "chat_id": f"{chat_id}/{topic}",
+                "text": m,
+                "reply_to_message_id": message_id
+            }  # Добавляем /2 для указания второго подканала
+            response: requests.Response = requests.get(url, params=params)
             logger.info(f'Отправка сообщения #{n}, Статус отправки {response.status_code}')
             time.sleep(2)

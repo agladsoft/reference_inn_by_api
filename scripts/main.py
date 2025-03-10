@@ -4,7 +4,6 @@ import datetime
 import numpy as np
 import pandas as pd
 from queue import Queue
-from pathlib import Path
 from csv import DictWriter
 from fuzzywuzzy import fuzz
 from requests import Response
@@ -22,7 +21,7 @@ from scripts.unified_companies import UnifiedCompaniesManager, SearchEngineParse
 
 
 class ReferenceInn(object):
-    def __init__(self, filename, directory):
+    def __init__(self, filename: str, directory: str):
         self.filename: str = filename
         self.directory: str = directory
         self.russian_companies: list = []
@@ -256,7 +255,11 @@ class ReferenceInn(object):
         if not data["is_fts_found"] and not enforce_get_company:
             self.write_to_csv(index, data)
             return
-        companies = list(search_engine.manager.fetch_company_name(countries_obj, inn, index, data.get("company_name")))
+        companies: List[Tuple[Optional[str], Optional[str], bool]] = list(
+            search_engine.manager.fetch_company_name(
+                countries_obj, inn, index, data.get("company_name"), self.telegram["errors"]
+            )
+        )
         for company_name, country, is_cache in companies:
             if company_name is not None:
                 data["is_company_name_from_cache"] = is_cache
@@ -607,7 +610,7 @@ class ReferenceInn(object):
             )
             retry_queue.put(index)
         else:
-            ERRORS.append(f'Exception: {ex_full}. Data: {index}, {sentence}')
+            self.telegram["errors"].append(f'Exception: {ex_full}. Data: {index}, {sentence}')
             logger.error(f"Exception: {ex_full}. Data: {index}, {sentence}")
             data_queue: dict = not_parsed_data[index - 2]
             self.write_to_csv(index, data_queue)
@@ -678,25 +681,6 @@ class ReferenceInn(object):
         except Exception as ex_full:
             logger.error(f'Unknown errors. Exception: {ex_full}. Data: {index, sentence}', pid=current_thread().ident)
             self.add_index_in_queue(not_parsed_data, retry_queue, is_queue, sentence, index, ex_full)
-
-    @staticmethod
-    def create_file_for_cache() -> str:
-        """
-        Creates a cache file for storing INN data.
-
-        This static method constructs the path for a cache file using the environment
-        variable 'XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS'. It ensures that the directory
-        exists, creates the cache file if it does not already exist, and returns the path
-        to the cache file.
-
-        :return: The path to the created cache file as a string.
-        """
-        path_cache: str = f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/cache_inn/cache_inn.db"
-        fle: Path = Path(path_cache)
-        if not os.path.exists(os.path.dirname(fle)):
-            os.makedirs(os.path.dirname(fle))
-        fle.touch(exist_ok=True)
-        return path_cache
 
     def convert_file_to_dict(self) -> List[dict]:
         """
@@ -841,8 +825,8 @@ class ReferenceInn(object):
         :return: None
         """
         logger.info('Составление сообщения для отправки ботом')
-        not_unified = self.telegram["all_company"] - self.telegram["company_name_unified"]
-        errors_ = '\n\n'.join(set(ERRORS)) if self.unknown_companies else ''
+        not_unified: int = self.telegram["all_company"] - self.telegram["company_name_unified"]
+        errors_: str = '\n\n'.join(set(self.telegram["errors"])) if self.unknown_companies else ''
         count_companies_upload: int = client.query(
             f"SELECT COUNT(*) FROM default.reference_inn "
             f"WHERE original_file_name='{os.path.basename(self.filename)}'"
