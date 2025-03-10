@@ -17,7 +17,7 @@ from bs4 import BeautifulSoup, PageElement
 from typing import Union, List, Optional, Any, Generator, Tuple
 
 
-def retry_on_failure(attempts: int = 3, delay: int = 20):
+def retry_on_failure(attempts: int = 3, delay: int = 20) -> Optional[callable]:
     """
     A decorator that retries a function if it raises an exception.
 
