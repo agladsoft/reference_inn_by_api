@@ -39,8 +39,17 @@ class ReferenceInn(object):
     @staticmethod
     def connect_to_db() -> Tuple[Client, dict]:
         """
-        Connecting to clickhouse.
-        :return: Client ClickHouse.
+        Establishes a connection to the database and retrieves data from the 'fts' table.
+
+        This method connects to a Clickhouse database using credentials and host information
+        from environment variables. It executes a query to select and group data from the 'fts'
+        table, specifically retrieving recipients' and senders' TINs, as well as their respective names.
+        The results are logged and returned as a dictionary mapping TINs to names.
+
+        :return: A tuple containing the database client and a dictionary
+            where keys are TINs and values are names from the 'fts' table.
+        :raises: SystemExit: If there is an error connecting to the database, logs the error and
+            sends a notification before terminating the program.
         """
         try:
             client: Client = get_client(
@@ -65,9 +74,19 @@ class ReferenceInn(object):
             send_to_telegram('Отсутствует подключение к базе данных при получение данных из таблица fts')
             raise SystemExit("отсутствует_подключение_к_базе") from ex_connect
 
-    def push_data_to_db(self, start_time_script: str):
+    def push_data_to_db(self, start_time_script: str) -> None:
         """
-        Push all data to clickhouse.
+        Pushes data from a CSV file to the database.
+
+        This method reads data from a CSV file generated during the script run,
+        processes it to replace NaN and NaT values with None, and inserts the
+        data into the 'reference_inn_all' table in the default database.
+
+        :param start_time_script: The timestamp at which the script started,
+                                  used to construct the CSV file path.
+        :return: None
+        :raises Exception: Logs an error message if there is any issue during
+                           the database insertion process.
         """
         try:
             client: Client = get_client(host=get_my_env_var('HOST'), database="default",
@@ -84,7 +103,16 @@ class ReferenceInn(object):
     @staticmethod
     def replace_forms_organizations(company_name: str) -> str:
         """
-        Deleting organization forms for the accuracy of determining confidence_rate.
+        Replaces organization forms and double quotes from a company name.
+
+        This function takes a company name string as an argument and
+        replaces the following organization forms: "ООО", "OOO", "OОO",
+        "OOО", "ООO", "ОАО", "ЗАО", "3АО", "АО", and double quotes.
+        It returns the modified string after stripping any leading or
+        trailing whitespace.
+
+        :param company_name: Company name string.
+        :return: Modified company name string
         """
         for elem in REPLACED_WORDS:
             company_name: str = company_name.replace(elem, "")
@@ -93,7 +121,20 @@ class ReferenceInn(object):
     @staticmethod
     def replace_quotes(sentence: str, quotes: list = None, replaced_str: str = '"') -> str:
         """
-        Deleting organization forms for the accuracy of determining confidence_rate.
+        Replaces specified quote characters in a sentence with a replacement string.
+
+        This static method iterates over a list of quote characters and replaces
+        each occurrence in the provided sentence with the specified replacement
+        string. By default, it replaces quotes with the standard double quote (").
+        If no list of quotes is provided, a predefined list of quote characters
+        is used.
+
+        :param sentence: The input string in which quotes are to be replaced.
+        :param quotes: A list of quote characters to be replaced. Defaults to None,
+                       which uses a predefined list of quotes.
+        :param replaced_str: The string to replace each quote character with.
+                             Defaults to the standard double quote (").
+        :return: The modified sentence with specified quote characters replaced.
         """
         if quotes is None:
             quotes = REPLACED_QUOTES
@@ -103,7 +144,23 @@ class ReferenceInn(object):
 
     def compare_different_fuzz(self, company_name: str, translated: Optional[str], data: dict) -> None:
         """
-        Comparing the maximum value of the two confidence_rate.
+        Compares two company names and sets a confidence rate based on similarity.
+
+        This method takes two company name strings and an empty dictionary as arguments.
+        If both company names are not empty, it processes the company name to strip
+        leading and trailing whitespace and to remove any extra whitespace between
+        words. It then calculates the similarity between the two company names using
+        the fuzzywuzzy library. The similarity is a value between 0 and 100, where
+        0 means no similarity and 100 means exact match. The method also attempts
+        to translate the company name from Russian to English using the Yandex
+        translator and compares the translated name with the translated argument.
+        Finally, it sets the 'confidence_rate' key in the data dictionary with the
+        maximum of the two similarity values calculated.
+
+        :param company_name: Company name string.
+        :param translated: Translated company name string.
+        :param data: Empty dictionary to store the confidence rate.
+        :return: None
         """
         if company_name and translated:
             company_name: str = re.sub(" +", " ", company_name)
@@ -117,9 +174,19 @@ class ReferenceInn(object):
             fuzz_company_name_two: int = fuzz.partial_ratio(company_name_en.upper(), translated.upper())
             data['confidence_rate'] = max(fuzz_company_name, fuzz_company_name_two)
 
-    def append_data(self, data: dict):
+    def append_data(self, data: dict) -> None:
         """
-        Append dictionary to list with countries.
+        Appends the given data to the appropriate company list based on the country.
+
+        This method takes a dictionary containing company data and appends it to one
+        of the following lists: russian_companies, unknown_companies, or foreign_companies.
+        It determines the appropriate list by checking the 'country' key in the data
+        dictionary. If the country is 'russia', the data is added to russian_companies.
+        If the country is None, the data is added to unknown_companies. Otherwise, the
+        data is added to foreign_companies.
+
+        :param data: A dictionary containing company data, which includes the 'country' key.
+        :return: None
         """
         if data.get("country") == "russia":
             self.russian_companies.append(data)
@@ -145,8 +212,37 @@ class ReferenceInn(object):
         enforce_get_company: bool = False
     ) -> None:
         """
-        We get a unified company name from the sentence itself for the found INN. And then we are looking for a company
-        on the website https://www.rusprofile.ru/.
+        Processes and fills data into the dictionary.
+
+        This method takes a dictionary containing company data and adds or updates
+        several keys with values from other arguments. It sets the 'company_inn' key
+        to the given INN, the 'sum_count_inn' key to the sum of the given INN count
+        and the 'company_inn_max_rank' key to the value of the 'company_inn_max_rank'
+        key in the num_inn_in_fts dictionary, plus one. If the 'is_fts_found' key in
+        the data dictionary is False and the enforce_get_company argument is False,
+        it writes the data to the CSV file and returns. Otherwise, it fetches a list
+        of company names and countries from the search engine and iterates over the
+        list, setting the 'is_company_name_from_cache', 'company_name_unified', and
+        'country' keys in the data dictionary to the corresponding values from the
+        list. It also compares the company name with the translated company name and
+        sets the 'confidence_rate' key in the data dictionary to the maximum of the
+        two similarity values calculated. Finally, it writes the data to the CSV file
+        and appends it to the list_inn_in_fts list.
+
+        :param fts: A dictionary containing FTS data.
+        :param countries_obj: An object containing country information.
+        :param search_engine: An object containing search engine information.
+        :param data: A dictionary containing company data.
+        :param inn: The INN of the company.
+        :param sentence: The sentence containing the company name.
+        :param index: The index of the sentence in the CSV file.
+        :param num_inn_in_fts: A dictionary containing the count of INNs in FTS.
+        :param list_inn_in_fts: A list to store the data.
+        :param translated: The translated company name.
+        :param inn_count: The count of the given INN.
+        :param sum_count_inn: The sum of the given INN count and the count of INNs in FTS.
+        :param enforce_get_company: A flag indicating whether to enforce getting the company name.
+        :return: None
         """
         logger.info(
             f"The processing and filling of data into the dictionary has begun. Data: {sentence}",
@@ -171,11 +267,21 @@ class ReferenceInn(object):
         self.write_to_csv(index, data)
         list_inn_in_fts.append(data)
 
-    def translate_sentence(self, sentence: str, only_russian: bool) -> Optional[str]:
+    def translate_sentence(self, sentence: str, with_russian: bool) -> Optional[str]:
         """
-        Getting translated sentence.
+        Translates a given sentence into Russian if with_russian is True.
+
+        This method takes a sentence and a boolean indicating if the sentence should be
+        translated to Russian. If with_russian is True, it replaces punctuation and
+        quotes in the sentence, translates it to Russian using the Yandex translator,
+        and strips the result. If with_russian is False, it only strips the sentence.
+        The translated sentence is then returned.
+
+        :param sentence: The sentence to be translated.
+        :param with_russian: A boolean indicating if the sentence should be translated to Russian.
+        :return: The translated sentence or the original sentence if with_russian is False.
         """
-        if only_russian:
+        if with_russian:
             sign: str = '/'
             sentence: str = sentence.translate({ord(c): " " for c in r".,!@#$%^&*()[]{};?\|~=_+"})
             sentence = self.replace_quotes(sentence, replaced_str=' ')
@@ -187,29 +293,36 @@ class ReferenceInn(object):
         sentence: str = sentence.translate({ord(c): " " for c in r"+"})
         return re.sub(" +", " ", sentence).strip()
 
-    def unify_companies(self, sentence, data: dict, index: int, fts: dict, only_russian: bool):
+    def unify_companies(self, sentence: str, data: dict, index: int, fts: dict, with_russian: bool):
         """
+        Unifies companies by getting the company name from the database and FTS.
 
-        :param sentence:
-        :param data:
-        :param index:
-        :param fts:
-        :param only_russian: bool
-        :return:
+        This method takes a sentence, data, index, FTS, and a boolean indicating if the sentence
+        should be translated to Russian. It translates the sentence to Russian if with_russian is
+        True, gets the taxpayer ID from the Yandex parser, and then gets the company name from
+        the database and FTS using the UnifiedCompaniesManager. The company name is then written
+        to the dictionary and the data is written to the CSV file.
+
+        :param sentence: The sentence to be unified.
+        :param data: The data to be written to the CSV file.
+        :param index: The index of the current row to be written to the CSV file.
+        :param fts: The FTS data.
+        :param with_russian: A boolean indicating if the sentence should be translated to Russian.
+        :return: None
         """
         list_inn_in_fts: List[dict] = []
         country: Optional[List[object]] = []
-        translated: Optional[str] = self.translate_sentence(sentence, only_russian)
+        translated: Optional[str] = self.translate_sentence(sentence, with_russian)
         data["request_to_yandex"] = f"{translated} ИНН"
         data['company_name_rus'] = translated
         num_inn_in_fts: Dict[str, int] = {"num_inn_in_fts": 0, "company_inn_max_rank": 1}
-        search_engine = SearchEngineParser(country, UnifiedCompaniesManager(only_russian))
+        search_engine = SearchEngineParser(country, UnifiedCompaniesManager(with_russian))
         dict_taxpayer_ids, taxpayer_id, from_cache = search_engine.get_taxpayer_id(translated)
-        countries = list({
+        countries: List[callable] = [
             item
             for inn in dict_taxpayer_ids
             for item in search_engine.manager.get_valid_company(inn)
-        })
+        ]
         if taxpayer_id:
             self.parse_all_found_inn(
                 fts, dict_taxpayer_ids, taxpayer_id, countries, search_engine,
@@ -237,7 +350,31 @@ class ReferenceInn(object):
         translated: str
     ) -> None:
         """
-        We extract data on all found INN from Yandex.
+        Processes and fills data into the dictionary for all found INNs.
+
+        This method takes a dictionary containing company data and adds or updates
+        several keys with values from other arguments. It processes all found INNs
+        and for each one, it fetches a list of company names and countries from the
+        search engine and iterates over the list, setting the 'is_company_name_from_cache',
+        'company_name_unified', and 'country' keys in the data dictionary to the
+        corresponding values from the list. It also compares the company name with
+        the translated company name and sets the 'confidence_rate' key in the data
+        dictionary to the maximum of the two similarity values calculated. If no
+        company was found for any of the INNs, it writes the data to the CSV file and
+        appends it to the list_inn_in_fts list.
+
+        :param fts: A dictionary containing FTS data.
+        :param dict_taxpayer_ids: A dictionary containing taxpayer IDs and their counts.
+        :param taxpayer_id: The taxpayer ID.
+        :param countries: An object containing country information.
+        :param search_engine: An object containing search engine information.
+        :param data: A dictionary containing company data.
+        :param sentence: The sentence containing the company name.
+        :param index: The index of the sentence in the CSV file.
+        :param num_inn_in_fts: A dictionary containing the count of INNs in FTS.
+        :param list_inn_in_fts: A list to store the data.
+        :param translated: The translated company name.
+        :return: None
         """
         sum_count_inn: int = sum(dict_taxpayer_ids.values())
         for inn, inn_count in dict_taxpayer_ids.items():
@@ -261,7 +398,17 @@ class ReferenceInn(object):
         from_cache: bool
     ) -> None:
         """
-        Write data inn in files.
+        Check if the company name is in FTS, and if so, write it to the CSV file and append it to the list_inn_in_fts list.
+        If not, use the one with the highest company_inn_count or fallback to the data if no valid INNs are found.
+        If the data is from the cache, do not write it to the cache.
+
+        :param search_engine: An object containing search engine information.
+        :param index: The index of the sentence in the CSV file.
+        :param data: A dictionary containing company data.
+        :param list_inn_in_fts: A list to store the data.
+        :param num_inn_in_fts: A dictionary containing the count of INNs in FTS.
+        :param from_cache: A boolean indicating if the data is from the cache.
+        :return: None
         """
         logger.info(f"Check company_name in FTS. Index: {index}. Data: {data}", pid=current_thread().ident)
         for dict_inn in list_inn_in_fts:
@@ -294,7 +441,22 @@ class ReferenceInn(object):
         num_inn_in_fts: Dict[str, int]
     ) -> None:
         """
-        Join FTS for checking INN.
+        Join the data with FTS data.
+
+        This method takes a dictionary containing FTS data, a dictionary containing company data,
+        an INN, the count of the given INN, and a dictionary containing the count of INNs in FTS.
+        It sets the 'company_inn_count' key in the data dictionary to the given INN count,
+        sets the 'is_fts_found' key to False, and sets the 'fts_company_name' key to None.
+        If the INN is in the FTS dictionary and is not None, it sets the 'is_fts_found' key to True,
+        increments the 'num_inn_in_fts' key in the num_inn_in_fts dictionary, and sets the
+        'fts_company_name' key to the value of the INN in the FTS dictionary.
+
+        :param fts: A dictionary containing FTS data.
+        :param data: A dictionary containing company data.
+        :param inn: The INN of the company.
+        :param inn_count: The count of the given INN.
+        :param num_inn_in_fts: A dictionary containing the count of INNs in FTS.
+        :return: None
         """
         data['company_inn_count'] = inn_count
         data["is_fts_found"] = False
@@ -304,7 +466,19 @@ class ReferenceInn(object):
             num_inn_in_fts["num_inn_in_fts"] += 1
             data["fts_company_name"] = fts[inn]
 
-    def to_csv(self, output_file_path: str, data: dict, operator: str):
+    def to_csv(self, output_file_path: str, data: dict, operator: str) -> None:
+        """
+        Writes data to a CSV file.
+
+        This method takes a file path, a dictionary containing the data to be written,
+        and an operator specifying whether to write or append to the file. It writes
+        the data to the file using the DictWriter from the csv module.
+
+        :param output_file_path: The path of the file to be written.
+        :param data: A dictionary containing the data to be written.
+        :param operator: A string specifying whether to write or append to the file.
+        :return: None
+        """
         with self.lock:
             with open(output_file_path, operator) as csvfile:
                 writer = DictWriter(csvfile, fieldnames=list(data.keys())) # type: ignore
@@ -314,7 +488,16 @@ class ReferenceInn(object):
 
     def write_to_csv(self, index: int, data: dict) -> None:
         """
-        Writing data to csv.
+        Writes the provided data to a CSV file.
+
+        This method constructs a file path based on the directory and filename,
+        ensuring the directory exists, and writes the data to the CSV file. If the
+        file already exists, it appends the data; otherwise, it creates a new file
+        and writes the data. Logs the success message with the index.
+
+        :param index: The index of the data to be written, used for logging.
+        :param data: A dictionary containing the data to be written to the file.
+        :return: None
         """
         basename: str = os.path.basename(self.filename)
         output_file_path: str = os.path.join(
@@ -330,7 +513,16 @@ class ReferenceInn(object):
 
     def count_to_telegram(self, data: List[dict]) -> None:
         """
-        Count company_unified,is_fts_found
+        Counts the number of unified company names and the number of companies that have no INN in FTS.
+
+        This method takes a list of dictionaries, where each dictionary represents a company. It counts
+        the number of unified company names (i.e., the number of companies that have a name in the
+        'company_name_unified' key) and the number of companies that have no INN in FTS (i.e., the number
+        of companies that have a None value in the 'is_fts_found' key). It updates the counters in the
+        'telegram' dictionary.
+
+        :param data: A list of dictionaries, where each dictionary represents a company.
+        :return: None
         """
         for row in data:
             company_name_unified = row.get('company_name_unified')
@@ -343,7 +535,15 @@ class ReferenceInn(object):
     @staticmethod
     def write_to_file(file_path, data):
         """
-        Запись данных в файл.
+        Writes data to a file in JSON format.
+
+        This static method takes a file path and data as input, and writes the data
+        to the specified file in JSON format with UTF-8 encoding. The method logs
+        a success message upon successful writing.
+
+        :param file_path: The path to the file where data will be written.
+        :param data: The data to be written to the file, typically a dictionary.
+        :return: None
         """
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
@@ -351,7 +551,15 @@ class ReferenceInn(object):
 
     def write_to_json(self) -> None:
         """
-        Запись данных в json.
+        Writes the company data to JSON files.
+
+        This method aggregates the Russian, foreign, and unknown companies, counts
+        them for telegram statistics, and writes each category of companies to
+        separate JSON files. The output files are named based on the original
+        filename, appending '_russia.json', '_foreign.json', and '_unknown.json'
+        for the respective categories.
+
+        :return: None
         """
         self.count_to_telegram(self.russian_companies + self.foreign_companies + self.unknown_companies)
         basename: str = os.path.basename(self.filename)
@@ -373,7 +581,24 @@ class ReferenceInn(object):
         ex_full: Exception
     ) -> None:
         """
-        Adding an index to the queue or writing empty data.
+        Adds the index to the queue for retry if an error occurs during parsing.
+
+        If the error occurs in the main thread (not in the queue), it logs an error
+        message and adds the index to the queue for retry. If the error occurs in a
+        separate thread (in the queue), it logs an error message, adds the index to
+        the queue for retry, and writes the data to a CSV file.
+
+        :param not_parsed_data: A list of dictionaries containing the data that was
+            not parsed.
+        :param retry_queue: A Queue object to which the index will be added for retry.
+        :param is_queue: A boolean indicating whether the error occurred in the main
+            thread (False) or in a separate thread (True).
+        :param sentence: A string containing the sentence that was being parsed when
+            the error occurred.
+        :param index: An integer containing the index of the sentence that was being
+            parsed when the error occurred.
+        :param ex_full: An Exception object containing the error that occurred.
+        :return: None
         """
         if not is_queue:
             logger.error(
@@ -388,7 +613,20 @@ class ReferenceInn(object):
             self.write_to_csv(index, data_queue)
             self.append_data(data_queue)
 
-    def add_new_columns(self, data: dict, start_time_script: str):
+    def add_new_columns(self, data: dict, start_time_script: str) -> None:
+        """
+        Adds new columns to the given data dictionary.
+
+        This method takes a dictionary 'data' and a string 'start_time_script' as input, and adds
+        four new key-value pairs to the dictionary. The keys are 'is_inn_found_auto',
+        'is_company_name_from_cache', 'original_file_name', and 'original_file_parsed_on', and
+        the values are True, False, the base name of the file, and the provided start time script,
+        respectively. This method is used to add columns to the data before it is written to a file.
+
+        :param data: A dictionary containing the data to which new columns will be added.
+        :param start_time_script: A string containing the start time of the script.
+        :return: None
+        """
         data['is_inn_found_auto'] = True
         data["is_company_name_from_cache"] = False
         data['original_file_name'] = os.path.basename(self.filename)
@@ -403,15 +641,33 @@ class ReferenceInn(object):
         start_time_script,
         retry_queue: Queue,
         is_queue: bool = False,
-        only_russian: bool = True
+        with_russian: bool = True
     ) -> None:
         """
-        Processing each row.
+        This method takes a list of dictionaries 'not_parsed_data', an integer 'index', a dictionary 'data',
+        a dictionary 'fts', a string 'start_time_script', a Queue object 'retry_queue', a boolean 'is_queue',
+        and a boolean 'with_russian' as input, and parses the data in the 'data' dictionary.
+
+        It adds new columns to the 'data' dictionary, then attempts to unify the company name
+        using the 'unify_companies' method. If an IndexError, ValueError, or TypeError occurs during
+        unification, it logs an error message and writes the data to a CSV file. If any other exception
+        occurs, it logs an error message, adds the index to the retry queue, and writes the data to a CSV file.
+
+        :param not_parsed_data: A list of dictionaries containing the data that was not parsed.
+        :param index: An integer containing the index of the sentence that is being parsed.
+        :param data: A dictionary containing the data to be parsed.
+        :param fts: A dictionary containing the FTS data.
+        :param start_time_script: A string containing the start time of the script.
+        :param retry_queue: A Queue object to which the index will be added for retry if an error occurs.
+        :param is_queue: A boolean indicating whether the error occurred in the main thread (False)
+            or in a separate thread (True).
+        :param with_russian: A boolean indicating whether to unify Russian companies (True) or not (False).
+        :return: None
         """
         self.add_new_columns(data, start_time_script)
         sentence: str = data.get("company_name")
         try:
-            self.unify_companies(sentence, data, index, fts, only_russian)
+            self.unify_companies(sentence, data, index, fts, with_russian)
         except (IndexError, ValueError, TypeError) as ex:
             logger.error(
                 f'Not found inn INN Yandex. Data: {index, sentence} (most likely a foreign company). '
@@ -426,7 +682,14 @@ class ReferenceInn(object):
     @staticmethod
     def create_file_for_cache() -> str:
         """
-        Creating a file for recording INN caches and sentence.
+        Creates a cache file for storing INN data.
+
+        This static method constructs the path for a cache file using the environment
+        variable 'XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS'. It ensures that the directory
+        exists, creates the cache file if it does not already exist, and returns the path
+        to the cache file.
+
+        :return: The path to the created cache file as a string.
         """
         path_cache: str = f"{os.environ.get('XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS')}/cache_inn/cache_inn.db"
         fle: Path = Path(path_cache)
@@ -437,7 +700,13 @@ class ReferenceInn(object):
 
     def convert_file_to_dict(self) -> List[dict]:
         """
-        Csv data representation in json.
+        Converts a file to a dictionary format.
+
+        This method reads an Excel file and converts it into a dictionary format.
+        It uses the pandas library to read the Excel file and perform the conversion.
+        It also updates the 'all_company' counter in the 'telegram' dictionary.
+
+        :return: A list of dictionaries, with each dictionary containing the company name.
         """
         dataframe: DataFrame = pd.read_excel(self.filename, dtype=str)
         dataframe = dataframe.dropna()
@@ -451,7 +720,13 @@ class ReferenceInn(object):
     @staticmethod
     def is_enough_money_to_search_engine():
         """
-        Check whether there is enough money in the wallet to process the current file.
+        Checks if there is enough money in the Yandex wallet to process all the lines.
+
+        It sends a Telegram message if the balance is between 100 and 200 rubles,
+        and raises a SystemExit if the balance is less than 100 rubles.
+
+        :raises SystemExit: If there is not enough money to process all the lines.
+        :return: None
         """
         try:
             response_balance: Response = requests.get(
@@ -475,10 +750,26 @@ class ReferenceInn(object):
         not_parsed_data: List[dict],
         fts_results: dict,
         start_time: str,
-        only_russian: bool = True
+        with_russian: bool = True
     ) -> None:
         """
-        Starting queue processing using a multithreading.
+        Starts the processing of processes that are in the queue.
+
+        This method is used after the main processing of the data. It processes the
+        processes that are in the queue. It waits for 2 minutes before starting the
+        processing of the queue. It then starts a ThreadPoolExecutor with a maximum
+        of COUNT_THREADS workers and submits the parse_data method for each index
+        in the queue.
+
+        :param retry_queue: A Queue object containing the indices of the processes
+            that are in the queue.
+        :param not_parsed_data: A list of dictionaries containing the data that was
+            not parsed.
+        :param fts_results: A dictionary containing the FTS data.
+        :param start_time: A string containing the start time of the script.
+        :param with_russian: A boolean indicating whether to unify Russian companies
+            (True) or not (False).
+        :return: None
         """
         if not retry_queue.empty():
             time.sleep(120)
@@ -496,7 +787,7 @@ class ReferenceInn(object):
                         start_time,
                         retry_queue,
                         is_queue=True,
-                        only_russian=only_russian
+                        with_russian=with_russian
                     )
 
     def start_multiprocessing(
@@ -505,10 +796,22 @@ class ReferenceInn(object):
         not_parsed_data: List[dict],
         fts_results: dict,
         start_time: str,
-        only_russian: bool = True
+        with_russian: bool = True
     ) -> None:
         """
-        Starting processing using a multithreading.
+        Initiates multiprocessing for parsing data.
+
+        This method uses a ThreadPoolExecutor to concurrently parse each dictionary
+        in the provided list of not_parsed_data. It submits the parse_data method
+        for execution, passing the necessary parameters for each entry in the list.
+
+        :param retry_queue: A Queue object used to track indices that need to be retried.
+        :param not_parsed_data: A list of dictionaries representing the data to be parsed.
+        :param fts_results: A dictionary containing FTS data.
+        :param start_time: A string representing the start time of the script.
+        :param with_russian: A boolean indicating whether Russian companies should be
+            unified (True) or not (False).
+        :return: None
         """
         with ThreadPoolExecutor(max_workers=COUNT_THREADS) as executor:
             for index, dict_data in enumerate(not_parsed_data, 2):
@@ -520,12 +823,22 @@ class ReferenceInn(object):
                     fts_results,
                     start_time,
                     retry_queue,
-                    only_russian=only_russian
+                    with_russian=with_russian
                 )
 
     def send_message(self, client: Client) -> None:
         """
-        Sending a message to the telegram.
+        Composes and sends a summary message to a Telegram bot.
+
+        This method collects data processing statistics, formats a summary message,
+        and sends it to a predefined Telegram chat. The statistics include the total
+        number of companies processed, the number of unified and non-unified company
+        names, and any errors encountered. It also queries the database to count the
+        number of companies uploaded.
+
+        :param client: A Client object used to query the database for the count of
+            companies uploaded.
+        :return: None
         """
         logger.info('Составление сообщения для отправки ботом')
         not_unified = self.telegram["all_company"] - self.telegram["company_name_unified"]
@@ -535,14 +848,14 @@ class ReferenceInn(object):
             f"WHERE original_file_name='{os.path.basename(self.filename)}'"
         ).result_rows[0][0]
         message: str = (
-            f"Завершена обработка файла: {self.filename.split('/')[-1]}.\n\n"
-            f"Кол-во строк в файле: {self.telegram['all_company']}\n\n"
-            f"Кол-во строк в базе: {count_companies_upload}\n\n"
-            f"Кол-во строк, где company_name_unified нашлось: {self.telegram['company_name_unified']}\n\n"
-            f"Кол-во строк, где company_name_unified НЕ нашлось: {not_unified}\n\n"
-            f"Кол-во строк, где is_fts_found НЕ нашлось: {self.telegram['is_fts_found']}\n\n"
-            f"Кол-во строк, где country НЕ была найдена: {len(self.unknown_companies)}\n\n"
-            f"Ошибки при обработке данных:\n{errors_}"
+            f"📈 Завершена обработка файла: {self.filename.split('/')[-1]}.\n\n"
+            f"📁 Кол-во строк в файле: {self.telegram['all_company']}\n\n"
+            f"🛢️ Кол-во строк в базе: {count_companies_upload}\n\n"
+            f"✅ Кол-во строк, где company_name_unified нашлось: {self.telegram['company_name_unified']}\n\n"
+            f"⚠️ Кол-во строк, где company_name_unified НЕ нашлось: {not_unified}\n\n"
+            f"⚠️ Кол-во строк, где is_fts_found НЕ нашлось: {self.telegram['is_fts_found']}\n\n"
+            f"⚠️ Кол-во строк, где country НЕ была найдена: {len(self.unknown_companies)}\n\n"
+            f"❌ Ошибки при обработке данных:\n{errors_}"
         )
         logger.info(message)
         send_to_telegram(message)
@@ -553,17 +866,37 @@ class ReferenceInn(object):
         data: List[dict],
         fts_results: dict,
         start_time: str,
-        only_russian: bool = True
+        with_russian: bool = True
     ):
         """
-        Runs multiprocessing for the given data.
+        Processes data using multiprocessing.
+
+        This method uses multiprocessing to concurrently parse data from the input file.
+        It starts two types of multiprocessing, one using a Queue and the other using
+        a ThreadPoolExecutor.
+
+        :param retry_queue: A Queue object used to track indices that need to be retried.
+        :param data: A list of dictionaries representing the data to be parsed.
+        :param fts_results: A dictionary containing FTS data.
+        :param start_time: A string representing the start time of the script.
+        :param with_russian: A boolean indicating whether Russian companies should be
+            unified (True) or not (False).
+        :return: None
         """
-        self.start_multiprocessing(retry_queue, data, fts_results, start_time, only_russian)
-        self.start_multiprocessing_with_queue(retry_queue, data, fts_results, start_time, only_russian)
+        self.start_multiprocessing(retry_queue, data, fts_results, start_time, with_russian)
+        self.start_multiprocessing_with_queue(retry_queue, data, fts_results, start_time, with_russian)
 
     def main(self) -> None:
         """
-        The main method that runs the code.
+        Executes the main workflow of the script.
+
+        This method initializes logging, connects to the database, and processes data
+        from the input file. It first checks the balance to ensure sufficient funds for
+        processing. The data is parsed using multiprocessing, with retries for any initially
+        unprocessed companies. The results are written to JSON and pushed to the database.
+        Finally, a summary message is sent to a Telegram bot after a delay.
+
+        :return: None
         """
         logging.basicConfig(
             filename=(
@@ -589,7 +922,7 @@ class ReferenceInn(object):
 
         # Повторная обработка ненайденных компаний
         self._process_data_with_multiprocessing(
-            retry_queue, unknown_companies, fts_results, start_time, only_russian=False
+            retry_queue, unknown_companies, fts_results, start_time, with_russian=False
         )
 
         self.write_to_json()

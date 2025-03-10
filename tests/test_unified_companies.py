@@ -31,7 +31,7 @@ class MockResponse(Response):
     def text(self):
         return self.content.decode('utf-8') if self.content else ""
 
-
+use_mock: bool = True
 test_sentence: str = "AFRUIT LLC, 192249, SOFIJSKAYA STR., D. 60,  LITER AM, KORPUS 8, P.KAM.3,  ST.PETERSBURG, RUSSIA"
 test_response_xml: str = (
     "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>"
@@ -66,17 +66,18 @@ test_response_xml: str = (
 
 @pytest.fixture
 def mock(mocker: Mock) -> None:
+
     mocker.patch("scripts.unified_companies.BaseUnifiedCompanies.cache_add_and_save")
 
 
 @pytest.fixture
 def unified_companies_manager():
-    return UnifiedCompaniesManager(only_russian=True)
+    return UnifiedCompaniesManager(with_russian=True)
 
 
 @pytest.fixture
-def unified_companies_manager_not_only_russian():
-    return UnifiedCompaniesManager(only_russian=False)
+def unified_companies_manager_not_with_russian():
+    return UnifiedCompaniesManager(with_russian=False)
 
 
 @pytest.fixture
@@ -122,6 +123,21 @@ def test_russian_companies_is_valid(
     taxpayer_id: str,
     expected: str
 ) -> None:
+    """
+    Test the `is_valid` method of `UnifiedRussianCompanies` for various taxpayer IDs.
+
+    This test checks if the given taxpayer ID is valid according to the
+    rules defined in the `UnifiedRussianCompanies` class. It uses
+    parametrized inputs to validate different scenarios, including valid
+    and invalid IDs.
+
+    The test asserts that the result of `is_valid` matches the expected
+    outcome for each input case.
+    :param russian_companies: The instance of `UnifiedRussianCompanies` to be tested.
+    :param taxpayer_id: The taxpayer ID to be validated.
+    :param expected: The expected result of the validation.
+    :return:
+    """
     assert russian_companies.is_valid(taxpayer_id) == expected
 
 
@@ -140,6 +156,22 @@ def test_kazakhstan_companies_is_valid(
     taxpayer_id: str,
     expected: str
 ) -> None:
+    """
+    Test the `is_valid` method of `UnifiedKazakhstanCompanies` for various taxpayer IDs.
+
+    This test checks if the given taxpayer ID is valid according to the
+    rules defined in the `UnifiedKazakhstanCompanies` class. It uses
+    parametrized inputs to validate different scenarios, including valid
+    and invalid IDs.
+
+    The test asserts that the result of `is_valid` matches the expected
+    outcome for each input case.
+
+    :param kazakhstan_companies: The instance of `UnifiedKazakhstanCompanies` to be tested.
+    :param taxpayer_id: The taxpayer ID to be validated.
+    :param expected: The expected result of the validation.
+    :return:
+    """
     assert kazakhstan_companies.is_valid(taxpayer_id) == expected
 
 
@@ -160,6 +192,22 @@ def test_belarus_companies_is_valid(
     taxpayer_id: str,
     expected: str
 ) -> None:
+    """
+    Test the `is_valid` method of `UnifiedBelarusCompanies` for various taxpayer IDs.
+
+    This test checks if the given taxpayer ID is valid according to the
+    rules defined in the `UnifiedBelarusCompanies` class. It uses
+    parametrized inputs to validate different scenarios, including valid
+    and invalid IDs.
+
+    The test asserts that the result of `is_valid` matches the expected
+    outcome for each input case.
+
+    :param belarus_companies: The instance of `UnifiedBelarusCompanies` to be tested.
+    :param taxpayer_id: The taxpayer ID to be validated.
+    :param expected: The expected result of the validation.
+    :return:
+    """
     assert belarus_companies.is_valid(taxpayer_id) == expected
 
 
@@ -179,6 +227,22 @@ def test_uzbekistan_companies_is_valid(
     taxpayer_id: str,
     expected: str
 ) -> None:
+    """
+    Test the `is_valid` method of `UnifiedUzbekistanCompanies` for various taxpayer IDs.
+
+    This test checks if the given taxpayer ID is valid according to the
+    rules defined in the `UnifiedUzbekistanCompanies` class. It uses
+    parametrized inputs to validate different scenarios, including valid
+    and invalid IDs.
+
+    The test asserts that the result of `is_valid` matches the expected
+    outcome for each input case.
+
+    :param uzbekistan_companies: The instance of `UnifiedUzbekistanCompanies` to be tested.
+    :param taxpayer_id: The taxpayer ID to be validated.
+    :param expected: The expected result of the validation.
+    :return:
+    """
     assert uzbekistan_companies.is_valid(taxpayer_id) == expected
 
 
@@ -196,6 +260,21 @@ def test_get_valid_company(
     taxpayer_id: str,
     expected: List[callable]
 ) -> None:
+    """
+    Test the `get_valid_company` method of `UnifiedCompaniesManager` for various taxpayer IDs.
+
+    This test checks if the `get_valid_company` method correctly identifies valid companies
+    based on the given taxpayer ID. It uses parametrized inputs to validate different scenarios,
+    each corresponding to a specific `UnifiedCompany` class instance.
+
+    The test asserts that the list of valid companies returned by `get_valid_company` matches
+    the expected list of company instances for each input case.
+
+    :param unified_companies_manager: The instance of `UnifiedCompaniesManager` to be tested.
+    :param taxpayer_id: The taxpayer ID to be validated.
+    :param expected: The expected list of valid company instances.
+    :return: None
+    """
     assert list(unified_companies_manager.get_valid_company(taxpayer_id)) == expected
 
 
@@ -209,11 +288,26 @@ def test_get_valid_company(
     ],
 )
 def test_get_valid_company(
-    unified_companies_manager_not_only_russian: UnifiedCompaniesManager,
+    unified_companies_manager_not_with_russian: UnifiedCompaniesManager,
     taxpayer_id: str,
     expected: List[callable]
 ) -> None:
-    assert list(unified_companies_manager_not_only_russian.get_valid_company(taxpayer_id)) == expected
+    """
+    Test the `get_valid_company` method of `UnifiedCompaniesManager` with `with_russian=False` for various taxpayer IDs.
+
+    This test checks if the `get_valid_company` method correctly identifies valid companies
+    based on the given taxpayer ID. It uses parametrized inputs to validate different scenarios,
+    each corresponding to a specific `UnifiedCompany` class instance.
+
+    The test asserts that the list of valid companies returned by `get_valid_company` matches
+    the expected list of company instances for each input case.
+
+    :param unified_companies_manager_not_with_russian: The instance of `UnifiedCompaniesManager` to be tested, with `with_russian=False`.
+    :param taxpayer_id: The taxpayer ID to be validated.
+    :param expected: The expected list of valid company instances.
+    :return: None
+    """
+    assert list(unified_companies_manager_not_with_russian.get_valid_company(taxpayer_id)) == expected
 
 
 @pytest.mark.parametrize(
@@ -228,6 +322,21 @@ def test_russian_companies_calc_company_check_digit(
     taxpayer_id: str,
     expected_check_digit: str
 ) -> None:
+    """
+    Test the `calc_company_check_digit` method of `UnifiedRussianCompanies` for various taxpayer IDs.
+
+    This test checks if the `calc_company_check_digit` method correctly calculates the check digit
+    for the given taxpayer ID. It uses parametrized inputs to validate different scenarios,
+    each corresponding to a specific taxpayer ID and its expected check digit.
+
+    The test asserts that the check digit returned by `calc_company_check_digit` matches
+    the expected check digit for each input case.
+
+    :param russian_companies: The instance of `UnifiedRussianCompanies` to be tested.
+    :param taxpayer_id: The taxpayer ID to be validated.
+    :param expected_check_digit: The expected check digit for the given taxpayer ID.
+    :return: None
+    """
     assert russian_companies.calc_company_check_digit(taxpayer_id) == expected_check_digit
 
 
@@ -243,6 +352,21 @@ def test_russian_companies_calc_personal_check_digits(
     taxpayer_id: str,
     expected_check_digits: str
 ) -> None:
+    """
+    Test the `calc_personal_check_digits` method of `UnifiedRussianCompanies` for various taxpayer IDs.
+
+    This test checks if the `calc_personal_check_digits` method correctly calculates the check digits
+    for the given taxpayer ID. It uses parametrized inputs to validate different scenarios,
+    each corresponding to a specific taxpayer ID and its expected check digits.
+
+    The test asserts that the check digits returned by `calc_personal_check_digits` match
+    the expected check digits for each input case.
+
+    :param russian_companies: The instance of `UnifiedRussianCompanies` to be tested.
+    :param taxpayer_id: The taxpayer ID to be validated.
+    :param expected_check_digits: The expected check digits for the given taxpayer ID.
+    :return: None
+    """
     assert russian_companies.calc_personal_check_digits(taxpayer_id) == expected_check_digits
 
 
@@ -258,6 +382,22 @@ def test_russian_companies_validate_valid(
     taxpayer_id: str,
     expected_number: str
 ) -> None:
+    """
+    Test the `validate` method of `UnifiedRussianCompanies` for valid taxpayer IDs.
+
+    This test ensures that the `validate` method correctly processes valid taxpayer IDs by
+    cleaning and verifying them according to the rules defined in the `UnifiedRussianCompanies` class.
+    It uses parametrized inputs to validate different scenarios, each representing a valid taxpayer ID
+    with various formatting issues (such as leading/trailing spaces or newlines).
+
+    The test asserts that the validated taxpayer ID matches the expected correctly formatted ID
+    for each input case.
+
+    :param russian_companies: The instance of `UnifiedRussianCompanies` to be tested.
+    :param taxpayer_id: The unformatted taxpayer ID to be validated.
+    :param expected_number: The expected correctly formatted taxpayer ID after validation.
+    :return: None
+    """
     assert russian_companies.validate(taxpayer_id) == expected_number
 
 
@@ -275,6 +415,21 @@ def test_russian_companies_validate_invalid(
     taxpayer_id: str,
     expected_exception: Type[Union[InvalidLength, InvalidFormat]]
 ) -> None:
+    """
+    Test the `validate` method of `UnifiedRussianCompanies` for invalid taxpayer IDs.
+
+    This test ensures that the `validate` method correctly raises an exception when given invalid
+    taxpayer IDs. It uses parametrized inputs to validate different scenarios, each representing an
+    invalid taxpayer ID that fails the validation rules defined in the `UnifiedRussianCompanies`
+    class.
+
+    The test asserts that the `validate` method raises the expected exception for each input case.
+
+    :param russian_companies: The instance of `UnifiedRussianCompanies` to be tested.
+    :param taxpayer_id: The invalid taxpayer ID to be validated.
+    :param expected_exception: The expected exception type to be raised when validating the given ID.
+    :return: None
+    """
     with pytest.raises(expected_exception):
         russian_companies.validate(taxpayer_id)
 
@@ -292,11 +447,29 @@ def test_russian_companies_get_company_by_taxpayer_id(
     taxpayer_id: str,
     expected_company: str
 ) -> None:
-    mock_response: MockResponse = MockResponse(
-        status_code=200,
-        json_data=[[{"value": expected_company, "unrestricted_value": expected_company}]]
-    )
-    mocker.patch('requests.post', return_value=mock_response)
+    """
+    Test the `get_company_by_taxpayer_id` method of `UnifiedRussianCompanies`.
+
+    This test verifies that the `get_company_by_taxpayer_id` method correctly retrieves
+    the expected company name for a given taxpayer ID. It uses parametrized inputs to
+    validate different scenarios, each corresponding to a specific taxpayer ID and
+    its expected company name.
+
+    The test mocks the HTTP response to simulate the behavior of the external service,
+    ensuring that the method under test behaves as expected without making actual API calls.
+
+    :param russian_companies: The instance of `UnifiedRussianCompanies` to be tested.
+    :param mocker: The mock object used to patch network calls.
+    :param taxpayer_id: The taxpayer ID to be validated.
+    :param expected_company: The expected company name for the given taxpayer ID.
+    :return: None
+    """
+    if use_mock:
+        mock_response: MockResponse = MockResponse(
+            status_code=200,
+            json_data=[[{"value": expected_company, "unrestricted_value": expected_company}]]
+        )
+        mocker.patch('requests.post', return_value=mock_response)
     assert russian_companies.get_company_by_taxpayer_id(taxpayer_id) == expected_company
 
 
@@ -313,8 +486,26 @@ def test_kazakhstan_companies_get_company_by_taxpayer_id(
     taxpayer_id: str,
     expected_company: str
 ) -> None:
-    mock_response = MockResponse(200, json_data={"results": [{"name": expected_company}]})
-    mocker.patch('scripts.unified_companies.BaseUnifiedCompanies.get_response', return_value=mock_response)
+    """
+    Test the `get_company_by_taxpayer_id` method of `UnifiedKazakhstanCompanies`.
+
+    This test verifies that the `get_company_by_taxpayer_id` method correctly retrieves
+    the expected company name for a given taxpayer ID. It uses parametrized inputs to
+    validate different scenarios, each corresponding to a specific taxpayer ID and
+    its expected company name.
+
+    The test mocks the HTTP response to simulate the behavior of the external service,
+    ensuring that the method under test behaves as expected without making actual API calls.
+
+    :param kazakhstan_companies: The instance of `UnifiedKazakhstanCompanies` to be tested.
+    :param mocker: The mock object used to patch network calls.
+    :param taxpayer_id: The taxpayer ID to be validated.
+    :param expected_company: The expected company name for the given taxpayer ID.
+    :return: None
+    """
+    if use_mock:
+        mock_response = MockResponse(200, json_data={"results": [{"name": expected_company}]})
+        mocker.patch('scripts.unified_companies.BaseUnifiedCompanies.get_response', return_value=mock_response)
     assert kazakhstan_companies.get_company_by_taxpayer_id(taxpayer_id) == expected_company
 
 
@@ -331,8 +522,29 @@ def test_belarus_companies_get_company_by_taxpayer_id(
     taxpayer_id: str,
     expected_company: str
 ) -> None:
-    mock_response = MockResponse(200, json_data={'row': {'vunp': taxpayer_id, 'vnaimk': expected_company}})
-    mocker.patch('scripts.unified_companies.BaseUnifiedCompanies.get_response', return_value=mock_response)
+    """
+    Test the `get_company_by_taxpayer_id` method of `UnifiedBelarusCompanies`.
+
+    This test verifies that the `get_company_by_taxpayer_id` method correctly retrieves
+    the expected company name for a given taxpayer ID. It uses parametrized inputs to
+    validate different scenarios, each corresponding to a specific taxpayer ID and
+    its expected company name.
+
+    The test mocks the HTTP response to simulate the behavior of the external service,
+    ensuring that the method under test behaves as expected without making actual API calls.
+
+    :param belarus_companies: The instance of `UnifiedBelarusCompanies` to be tested.
+    :param mocker: The mock object used to patch network calls.
+    :param taxpayer_id: The taxpayer ID to be validated.
+    :param expected_company: The expected company name for the given taxpayer ID.
+    :return: None
+    """
+    if use_mock:
+        mock_response = MockResponse(
+            200,
+            json_data={'row': {'vunp': taxpayer_id, 'vnaimk': expected_company}}
+        )
+        mocker.patch('scripts.unified_companies.BaseUnifiedCompanies.get_response', return_value=mock_response)
     assert belarus_companies.get_company_by_taxpayer_id(taxpayer_id) == expected_company
 
 
@@ -349,32 +561,30 @@ def test_uzbekistan_companies_get_company_by_taxpayer_id(
     taxpayer_id: str,
     expected_company: str
 ) -> None:
-    mock_response = MockResponse(
-        status_code=200,
-        text=f'<div class="card-body pt-0"><h6 class="card-title">{expected_company}</h6></div>'
-    )
-    mocker.patch('scripts.unified_companies.BaseUnifiedCompanies.get_response', return_value=mock_response)
+    """
+    Test the `get_company_by_taxpayer_id` method of `UnifiedUzbekistanCompanies`.
+
+    This test verifies that the `get_company_by_taxpayer_id` method correctly retrieves
+    the expected company name for a given taxpayer ID. It uses parametrized inputs to
+    validate different scenarios, each corresponding to a specific taxpayer ID and
+    its expected company name.
+
+    The test mocks the HTTP response to simulate the behavior of the external service,
+    ensuring that the method under test behaves as expected without making actual API calls.
+
+    :param uzbekistan_companies: The instance of `UnifiedUzbekistanCompanies` to be tested.
+    :param mocker: The mock object used to patch network calls.
+    :param taxpayer_id: The taxpayer ID to be validated.
+    :param expected_company: The expected company name for the given taxpayer ID.
+    :return: None
+    """
+    if use_mock:
+        mock_response = MockResponse(
+            status_code=200,
+            text=f'<div class="card-body pt-0"><h6 class="card-title">{expected_company}</h6></div>'
+        )
+        mocker.patch('scripts.unified_companies.BaseUnifiedCompanies.get_response', return_value=mock_response)
     assert uzbekistan_companies.get_company_by_taxpayer_id(taxpayer_id) == expected_company
-
-
-@pytest.mark.parametrize(
-    "sentence, expected",
-    [
-        ('test "test" test', 'test "test" test'),
-        ('test `test` test', 'test "test" test'),
-        ("test 'test' test", 'test "test" test'),
-        ('test <test> test', 'test "test" test'),
-        ('test “test” test', 'test "test" test'),
-        ('test «test» test', 'test "test" test'),
-        ('test ‘test’ test', 'test "test" test')
-    ],
-)
-def test_search_engine_parser_replace_quotes(
-    search_engine_parser: SearchEngineParser,
-    sentence: str,
-    expected: str
-) -> None:
-    assert search_engine_parser.replace_quotes(sentence) == expected
 
 
 @pytest.mark.parametrize(
@@ -391,12 +601,40 @@ def test_search_engine_parser_get_inn_from_site(
     taxpayer_id: str,
     expected_count: int
 ) -> None:
+    """
+    Test the `get_inn_from_site` method of `SearchEngineParser`.
+
+    This test ensures that the `get_inn_from_site` method correctly retrieves
+    the expected count of companies for a given taxpayer ID from the external
+    service. It uses parametrized inputs to validate different scenarios, each
+    representing a taxpayer ID and its expected company count.
+
+    The test asserts that the modified dictionary matches the expected dictionary
+    where the given taxpayer ID is mapped to the expected count of companies.
+
+    :param search_engine_parser: The instance of `SearchEngineParser` to be tested.
+    :param taxpayer_id: The taxpayer ID to be validated.
+    :param expected_count: The expected count of companies for the given taxpayer ID.
+    :return: None
+    """
     dict_inn: dict = {}
     search_engine_parser.get_inn_from_site(dict_inn, [taxpayer_id], expected_count)
     assert dict_inn == {taxpayer_id: expected_count}
 
 
 def test_search_engine_parser_get_code_error(search_engine_parser: SearchEngineParser) -> None:
+    """
+    Test the `get_code_error` method of `SearchEngineParser`.
+
+    This test verifies that the `get_code_error` method raises the correct exception
+    based on the error code provided in the XML element. It uses two scenarios to
+    validate the behavior:
+      - When the error code is "200", it expects an `AssertionError` to be raised.
+      - When the error code is "400", it expects a `ConnectionRefusedError` to be raised.
+
+    :param search_engine_parser: The instance of `SearchEngineParser` to be tested.
+    :return: None
+    """
     error_code: ElemTree.Element = ElemTree.fromstring('<error code="200">test error</error>')
     with pytest.raises(AssertionError):
         search_engine_parser.get_code_error(error_code, "test_value")
@@ -407,6 +645,26 @@ def test_search_engine_parser_get_code_error(search_engine_parser: SearchEngineP
 
 
 def test_search_engine_parser_parse_xml(search_engine_parser: SearchEngineParser) -> None:
+    """
+    Test the `parse_xml` method of `SearchEngineParser`.
+
+    This test verifies that the `parse_xml` method correctly parses the XML response
+    and updates the dictionary with the found INNs and their counts. It uses a sample
+    XML response containing two companies with different INNs.
+
+    The test asserts that the modified dictionary matches the expected dictionary
+    where the INNs are mapped to their respective counts.
+
+    :param search_engine_parser: The instance of `SearchEngineParser` to be tested.
+    :return: None
+    """
+    dict_inn: dict = {}
+    response: MockResponse = MockResponse(
+        status_code=200,
+        text=test_response_xml
+    )
+    search_engine_parser.parse_xml(response, test_sentence, dict_inn, 1)
+    assert dict_inn == {"781118914402": 1, "7816734305": 1}
     dict_inn: dict = {}
     response: MockResponse = MockResponse(
         status_code=200,
@@ -420,12 +678,42 @@ def test_search_engine_parser_get_inn_from_search_engine(
     search_engine_parser: SearchEngineParser,
     mocker: Mock
 ) -> None:
-    mock_response: MockResponse = MockResponse(200, text=test_response_xml)
-    mocker.patch('requests.get', return_value=mock_response)
+    """
+    Test the `get_inn_from_search_engine` method of `SearchEngineParser`.
+
+    This test verifies that the `get_inn_from_search_engine` method correctly retrieves
+    and parses the INNs from the search engine response for a given sentence. It uses a
+    mocked HTTP response to simulate the behavior of the search engine, ensuring that
+    the correct INNs are extracted from the XML response.
+
+    The test asserts that the list of INNs retrieved from the method matches the expected
+    list of INNs.
+
+    :param search_engine_parser: The instance of `SearchEngineParser` to be tested.
+    :param mocker: The mocker fixture to patch the HTTP request.
+    :return: None
+    """
+    if use_mock:
+        mock_response: MockResponse = MockResponse(200, text=test_response_xml)
+        mocker.patch('requests.get', return_value=mock_response)
     assert list(search_engine_parser.get_inn_from_search_engine(test_sentence)) == ['781118914402', '7816734305']
 
 
-def test_retry_on_failure(mocker):
+def test_retry_on_failure(mocker) -> None:
+    """
+    Test the `retry_on_failure` decorator.
+
+    This test verifies that the `retry_on_failure` decorator correctly retries a
+    function that raises an exception a specified number of times. It then asserts
+    that the function is called the correct number of times and that the final
+    exception is correctly raised.
+
+    The test also verifies that the function is called the correct number of times
+    when the exception is raised on each attempt.
+
+    :param mocker: The mocker fixture to patch the HTTP request.
+    :return: None
+    """
     mock_func = mocker.Mock(side_effect=[Exception("Test Exception"), 123])
     decorated_func = retry_on_failure(attempts=2, delay=0)(mock_func)
     assert decorated_func() == 123

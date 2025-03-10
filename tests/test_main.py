@@ -9,11 +9,14 @@ import numpy as np
 import pandas as pd
 from typing import List
 from pathlib import PosixPath
+from unittest.mock import Mock
 from scripts.main import ReferenceInn
-from unittest.mock import patch, Mock
 from deep_translator import single_detection
 from _pytest.logging import LogCaptureFixture
 from scripts.unified_companies import SearchEngineParser, UnifiedCompaniesManager
+
+
+use_mock: bool = True
 
 
 @pytest.fixture
@@ -28,13 +31,23 @@ def reference_inn_instance(mock_main: Mock, tmp_path: PosixPath) -> ReferenceInn
     return ReferenceInn(f"{tmp_path}/test_file.xlsx", f"{tmp_path}/json")
 
 
-@patch("pandas.read_excel")
-def test_convert_file_to_dict(mock_read_excel: Mock, reference_inn_instance: ReferenceInn) -> None:
+def test_convert_file_to_dict(mocker: Mock, reference_inn_instance: ReferenceInn) -> None:
+    """
+    Testing the convert_file_to_dict method of ReferenceInn class.
+
+    This test creates a mock dataframe with a column "A" containing some names and a NaN value.
+    The method is called and the result is checked to match the expected output.
+    The expected output is a list of dictionaries with the company names as values.
+    The test also checks that the counter in the telegram dictionary is incremented correctly.
+    :param mocker: Mocker fixture.
+    :param reference_inn_instance: ReferenceInn instance.
+    :return:
+    """
     # Act
     mock_data: pd.DataFrame = pd.DataFrame({
         "A": ["Company1", "Company2_x000D_", np.nan, "Company3"]
     })
-    mock_read_excel.return_value = mock_data
+    mocker.patch("pandas.read_excel", return_value=mock_data)
 
     result: List[dict] = reference_inn_instance.convert_file_to_dict()
     expected_output: List[dict] = [
@@ -67,17 +80,35 @@ def test_convert_file_to_dict(mock_read_excel: Mock, reference_inn_instance: Ref
         ),  # Ошибка из-за неправильного формата
     ]
 )
-@patch("scripts.main.send_to_telegram")
-@patch("scripts.main.requests.get")
 def test_is_enough_money_to_search_engine(
-    mock_get: Mock,
-    mock_send_to_telegram: Mock,
+    mocker: Mock,
     balance_text: str,
     expected_message: str,
     expected_exit: bool,
     request_exception: Exception
-):
+) -> None:
+    """
+    Testing the is_enough_money_to_search_engine method of ReferenceInn class.
+
+    This test checks the behavior of the method under different conditions.
+    It uses parametrization to check the following cases:
+        - There is enough money in the Yandex wallet.
+        - There is a warning because the balance is low.
+        - There is an error because the balance is too low.
+        - There is an error because the response from the Yandex API is not a valid float.
+
+    The test checks that the correct message is sent to Telegram in each case.
+    It also checks that SystemExit is raised when an error occurs.
+    :param mocker: Mocker fixture.
+    :param balance_text: Balance text.
+    :param expected_message: Expected message.
+    :param expected_exit: Expected exit.
+    :param request_exception: Request exception.
+    :return:
+    """
     # Act
+    mock_get: Mock = mocker.patch("scripts.main.requests.get")
+    mock_send_to_telegram: Mock = mocker.patch("scripts.main.send_to_telegram")
     if request_exception:
         mock_get.side_effect = request_exception  # Имитация ошибки запроса
     else:
@@ -105,7 +136,21 @@ def test_is_enough_money_to_search_engine(
         ("2024-07-29 15:45:00", {"key1": "value1", "key2": "value2"}),
     ]
 )
-def test_add_new_columns(reference_inn_instance: ReferenceInn, start_time_script, initial_data):
+def test_add_new_columns(reference_inn_instance: ReferenceInn, start_time_script: str, initial_data: dict) -> None:
+    """
+    Test the add_new_columns method of the ReferenceInn class.
+
+    This test verifies that the add_new_columns method correctly adds new columns
+    to the provided data dictionary. It checks that the 'is_inn_found_auto' is set to True,
+    'is_company_name_from_cache' is set to False, 'original_file_name' is set to the base
+    name of the ReferenceInn instance's filename, and 'original_file_parsed_on' is set to
+    the provided start_time_script. Additionally, it ensures that any existing keys in the
+    initial data are preserved.
+
+    :param reference_inn_instance: ReferenceInn instance.
+    :param start_time_script: The script start time to be added to the data.
+    :param initial_data: Initial data dictionary to which new columns will be added.
+    """
     # Act
     data: dict = initial_data.copy()
     reference_inn_instance.add_new_columns(data, start_time_script)
@@ -128,6 +173,18 @@ def test_add_new_columns(reference_inn_instance: ReferenceInn, start_time_script
     ]
 )
 def test_write_to_csv(reference_inn_instance: ReferenceInn, index: int, data: dict, caplog: LogCaptureFixture) -> None:
+    """
+    Test the write_to_csv method of the ReferenceInn class.
+
+    This test verifies that the write_to_csv method correctly writes data to a
+    CSV file. It checks that the file is created, that the data is written to the
+    file, and that the data is correctly formatted.
+
+    :param reference_inn_instance: ReferenceInn instance.
+    :param index: Index of the data to be written.
+    :param data: Data to be written.
+    :param caplog: LogCaptureFixture fixture.
+    """
     reference_inn_instance.write_to_csv(index, data)
     basename: str = os.path.basename(reference_inn_instance.filename)
     output_dir: str = os.path.join(os.path.dirname(reference_inn_instance.directory), "csv")
@@ -161,6 +218,21 @@ def test_append_data(
     expected_unknown_companies: list,
     expected_foreign_companies: list
 ) -> None:
+    """
+    Testing the append_data method of the ReferenceInn class.
+
+    This test verifies that the append_data method correctly appends the given data
+    to the appropriate list. It checks that the Russian companies list contains
+    the expected Russian companies, the unknown companies list contains the expected
+    unknown companies, and the foreign companies list contains the expected foreign
+    companies.
+
+    :param reference_inn_instance: ReferenceInn instance.
+    :param data: Data to be appended.
+    :param expected_russian_companies: Expected Russian companies.
+    :param expected_unknown_companies: Expected unknown companies.
+    :param expected_foreign_companies: Expected foreign companies.
+    """
     # Act
     reference_inn_instance.append_data(data)
 
@@ -171,7 +243,7 @@ def test_append_data(
 
 
 @pytest.mark.parametrize(
-    "sentence, only_russian, expected",
+    "sentence, with_russian, expected",
     [
         ("This is a test string, with some punctuation!!!", True, "ru"),
         ("This is a test string, with some punctuation!", False, "This is a test string, with some punctuation!"),
@@ -180,16 +252,36 @@ def test_append_data(
     ],
 )
 def test_translate_sentence(
+    mocker: Mock,
     reference_inn_instance: ReferenceInn,
     sentence: str,
-    only_russian: bool,
+    with_russian: bool,
     expected: str
 ) -> None:
+    """
+    Test the translate_sentence method of the ReferenceInn class.
+
+    This test verifies that the translate_sentence method correctly translates
+    a given sentence into Russian when with_russian is True. It checks if the
+    translation is performed correctly by the Yandex and Google translators using
+    mock objects. When with_russian is False, it ensures that the sentence is
+    returned without translation and punctuation is correctly removed.
+
+    :param mocker: Mocker fixture.
+    :param reference_inn_instance: ReferenceInn instance.
+    :param sentence: The sentence to be translated.
+    :param with_russian: A boolean indicating if translation to Russian is required.
+    :param expected: The expected translated or processed sentence.
+    """
     # Act
-    actual = reference_inn_instance.translate_sentence(sentence, only_russian)
+    if use_mock:
+        return_translated = "Это тестовая строка с некоторыми знаками препинания"
+        mocker.patch("scripts.translate.YandexTranslatorAdapter.translate", return_value=return_translated)
+        mocker.patch("scripts.translate.GoogleTranslatorAdapter.translate", return_value=return_translated)
+    actual = reference_inn_instance.translate_sentence(sentence, with_russian)
 
     # Assert
-    if only_russian:
+    if with_russian:
         lang = single_detection(actual, api_key="2b2f53f46c2b7d115d69bf391cfe44c0")
         assert lang == expected
     else:
@@ -255,9 +347,8 @@ def test_translate_sentence(
         ),
     ],
 )
-@patch("scripts.unified_companies.UnifiedCompaniesManager.fetch_company_name")
 def test_get_data(
-    mock_fetch_company_name: Mock,
+    mocker: Mock,
     reference_inn_instance: ReferenceInn,
     is_fts_found: bool,
     fts: dict,
@@ -265,6 +356,24 @@ def test_get_data(
     mock_companies: tuple,
     expected_data: dict
 ) -> None:
+    """
+    Test the get_data method of the ReferenceInn class.
+
+    This test verifies that the get_data method correctly processes company
+    information and populates the data dictionary based on the input parameters.
+    It checks various scenarios such as when a company is found or not found in
+    FTS, when a company search is enforced, and when mock company data is provided.
+    The test uses mock objects to simulate the behavior of fetching company names
+    and to validate the final data structure against expected results.
+
+    :param mocker: Mocker fixture for patching methods.
+    :param reference_inn_instance: ReferenceInn instance to test.
+    :param is_fts_found: Boolean indicating if the company is found in FTS.
+    :param fts: Dictionary containing INN and company names from FTS.
+    :param enforce_get_company: Boolean indicating if company search is enforced.
+    :param mock_companies: Tuple representing mock company data (name, country, cache status).
+    :param expected_data: Expected data dictionary after processing.
+    """
     # Arrange
     list_inn_in_fts: list = []
     num_inn_in_fts: dict = {"company_inn_max_rank": 0, "num_inn_in_fts": 0}
@@ -272,12 +381,15 @@ def test_get_data(
         "original_file_parsed_on": os.path.basename(reference_inn_instance.filename)
     }
     search_engine = SearchEngineParser([], UnifiedCompaniesManager(True))
-    mock_fetch_company_name.return_value = iter(mock_companies)
+    mocker.patch(
+        "scripts.unified_companies.UnifiedCompaniesManager.fetch_company_name",
+        return_value= iter(mock_companies)
+    )
 
     # Act
     reference_inn_instance.get_data(
         fts=fts,
-        countries_obj=mock_fetch_company_name,
+        countries_obj=mocker,
         search_engine=search_engine,
         data=data,
         inn=expected_data["company_inn"],
@@ -305,20 +417,34 @@ def test_get_data(
         ("ООО Тестовая компания", None, None)
     ],
 )
-@patch("scripts.translate.YandexTranslatorAdapter.translate")
-@patch("scripts.translate.GoogleTranslatorAdapter.translate")
 def test_compare_different_fuzz(
-    mock_google_translate: Mock,  # Первый patch (Google)
-    mock_yandex_translate: Mock,  # Второй patch (Yandex)
+    mocker: Mock,
     reference_inn_instance: ReferenceInn,
     company_name: str,
     translated: str,
     expected_confidence_rate: int
 ) -> None:
+    """
+    Test the compare_different_fuzz method of the ReferenceInn class.
+
+    This test checks the calculation of confidence rates when comparing company names.
+    It uses parameterized inputs to verify various scenarios, including:
+    - When both company_name and translated are provided and should result in a 100% confidence rate.
+    - When company_name matches translated exactly, resulting in a 100% confidence rate.
+    - When either company_name or translated is missing, resulting in no confidence rate being set.
+
+    :param mocker: Mock fixture for patching translator methods.
+    :param reference_inn_instance: Instance of ReferenceInn to test.
+    :param company_name: The original company name.
+    :param translated: The translated company name.
+    :param expected_confidence_rate: The expected confidence rate to be asserted.
+    """
     # Arrange
     data: dict = {}
-    mock_google_translate.return_value = "Test Company"
-    mock_yandex_translate.return_value = "Test Company"
+    if use_mock:
+        return_translated = "Test Company"
+        mocker.patch("scripts.translate.YandexTranslatorAdapter.translate", return_value=return_translated)
+        mocker.patch("scripts.translate.GoogleTranslatorAdapter.translate", return_value=return_translated)
 
     # Act
     reference_inn_instance.compare_different_fuzz(company_name, translated, data)
@@ -343,10 +469,146 @@ def test_compare_different_fuzz(
     ],
 )
 def test_replace_forms_organizations(reference_inn_instance: ReferenceInn, company_name: str, expected: str) -> None:
+    """
+    Test the replace_forms_organizations method of the ReferenceInn class.
+
+    This test verifies that the replace_forms_organizations method correctly removes
+    organization forms from the company name. It uses parameterized inputs to cover
+    various scenarios, including:
+    - Removing "ООО" from the company name.
+    - Removing "ЗАО" from the company name.
+    - Removing "ОАО" from the company name.
+    - Leaving empty strings and strings with only whitespace unchanged.
+    - Removing double quotes from the company name.
+    - Leaving company names without organization forms unchanged.
+
+    The test asserts that the actual result of calling the method matches the expected
+    result for each scenario.
+
+    :param reference_inn_instance: Instance of ReferenceInn to test.
+    :param company_name: The original company name.
+    :param expected: The expected company name after removing organization forms.
+    """
     # Act
     actual = reference_inn_instance.replace_forms_organizations(company_name)
     # Assert
     assert actual == expected
+
+
+@pytest.mark.parametrize(
+    "sentence, expected",
+    [
+        ('test "test" test', 'test "test" test'),
+        ('test `test` test', 'test "test" test'),
+        ("test 'test' test", 'test "test" test'),
+        ('test <test> test', 'test "test" test'),
+        ('test “test” test', 'test "test" test'),
+        ('test «test» test', 'test "test" test'),
+        ('test ‘test’ test', 'test "test" test')
+    ],
+)
+def test_search_engine_parser_replace_quotes(
+    reference_inn_instance: ReferenceInn,
+    sentence: str,
+    expected: str
+) -> None:
+    """
+    Test the `replace_quotes` method of `ReferenceInn`.
+
+    This test ensures that the `replace_quotes` method correctly replaces various types
+    of quotes in a given sentence with the standard double quote ("). It uses parametrized
+    inputs to validate different scenarios, each representing a sentence with different
+    quote characters.
+
+    The test asserts that the modified sentence matches the expected sentence where all
+    quote characters are replaced with double quotes.
+
+    :param reference_inn_instance: The instance of `ReferenceInn` to be tested.
+    :param sentence: The sentence containing various quote characters.
+    :param expected: The expected sentence with all quotes replaced by double quotes.
+    :return: None
+    """
+    assert reference_inn_instance.replace_quotes(sentence) == expected
+
+
+@pytest.mark.parametrize(
+    "sentence, data, index, fts, with_russian, expected_data",
+    [
+        (
+            "“EUROPAPIER” LLC RUSSIA, 129110, MOSCOW, BOLSHAYA PEREYASLAVSKAYA STR., 46, BLD.2, 4TH FL., "
+            "OFFICE 1,ROTEL: +7 495 787 0150 (EXT.154)",
+            {
+                "company_name": "“EUROPAPIER” LLC RUSSIA, 129110, MOSCOW, BOLSHAYA PEREYASLAVSKAYA STR., 46, BLD.2, "
+                                "4TH FL., OFFICE 1,ROTEL: +7 495 787 0150 (EXT.154)",
+                "original_file_parsed_on": "2025-03-10"
+            },
+            2,
+            {},
+            True,
+            {
+                'company_name': '“EUROPAPIER” LLC RUSSIA, 129110, MOSCOW, BOLSHAYA PEREYASLAVSKAYA STR., 46, BLD.2, '
+                                '4TH FL., OFFICE 1,ROTEL: +7 495 787 0150 (EXT.154)',
+                'company_name_rus': 'ООО ЕВРОПАПИР РОССИЯ, 129110, МОСКВА, УЛ. БОЛЬШАЯ ПЕРЕЯСЛАВСКАЯ, д. 46, СТР. 2, '
+                                    '4 ЭТАЖ, ОФИС 1, ROTEL: 7 495 787 0150 ДОБ. 154',
+                'original_file_parsed_on': '2025-03-10',
+                'request_to_yandex': 'ООО ЕВРОПАПИР РОССИЯ, 129110, МОСКВА, УЛ. БОЛЬШАЯ ПЕРЕЯСЛАВСКАЯ, д. 46, СТР. 2, '
+                                     '4 ЭТАЖ, ОФИС 1, ROTEL: 7 495 787 0150 ДОБ. 154 ИНН'
+            }
+        )
+    ],
+)
+def test_unify_companies(
+    mocker: Mock,
+    reference_inn_instance: ReferenceInn,
+    sentence: str,
+    data: dict,
+    index: int,
+    fts: dict,
+    with_russian: bool,
+    expected_data: dict
+) -> None:
+    """
+    Test the unify_companies method of the ReferenceInn class.
+
+    This test verifies that the unify_companies method correctly unifies company names.
+    It uses parameterized inputs to cover various scenarios, including:
+    - When both company_name and translated are provided and should result in a 100% confidence rate.
+    - When company_name matches translated exactly, resulting in a 100% confidence rate.
+    - When either company_name or translated is missing, resulting in no confidence rate being set.
+
+    The test asserts that the actual result of calling the method matches the expected
+    result for each scenario.
+
+    :param mocker: Mock fixture for patching translator methods.
+    :param reference_inn_instance: Instance of ReferenceInn to test.
+    :param sentence: The original sentence to be processed.
+    :param data: The original data dictionary.
+    :param index: The index of the sentence in the file.
+    :param fts: The fts dictionary.
+    :param with_russian: Whether to translate the company name to Russian.
+    :param expected_data: The expected data dictionary after processing.
+    """
+    # Arrange
+    if use_mock:
+        return_translated: str = (
+            "ООО ЕВРОПАПИР РОССИЯ, 129110, МОСКВА, УЛ. БОЛЬШАЯ ПЕРЕЯСЛАВСКАЯ, д. 46, СТР. 2, 4 ЭТАЖ, ОФИС 1, "
+            "ROTEL: 7 495 787 0150 ДОБ. 154"
+        )
+        mocker.patch("scripts.translate.YandexTranslatorAdapter.translate", return_value=return_translated)
+        mocker.patch("scripts.translate.GoogleTranslatorAdapter.translate", return_value=return_translated)
+        mocker.patch(
+            "scripts.unified_companies.SearchEngineParser.get_taxpayer_id",
+            return_value=({"7708502716": 6}, "7708502716", False)
+        )
+        mocker.patch(
+            "scripts.unified_companies.UnifiedCompaniesManager.fetch_company_name",
+            return_value=[('ООО "ЕВРОПАПИР"', "russia", False)]
+        )
+    # Act
+    reference_inn_instance.unify_companies(sentence, data, index, fts, with_russian)
+
+    # Assert
+    assert data == expected_data
 
 
 @pytest.mark.parametrize(
@@ -406,9 +668,8 @@ def test_replace_forms_organizations(reference_inn_instance: ReferenceInn, compa
         ),
     ],
 )
-@patch("scripts.unified_companies.BaseUnifiedCompanies.cache_add_and_save")
 def test_write_existing_inn_from_fts(
-    mock_cache_add_and_save: Mock,
+    mocker: Mock,
     reference_inn_instance: ReferenceInn,
     list_inn_in_fts: list,
     num_inn_in_fts: dict,
@@ -416,12 +677,33 @@ def test_write_existing_inn_from_fts(
     data: dict,
     expected_append_data_calls: list
 ) -> None:
+    """
+    Test the write_existing_inn_from_fts method of the ReferenceInn class.
+
+    This test verifies that the write_existing_inn_from_fts method correctly processes and appends data
+    for existing INNs found in the FTS. It uses parameterized inputs to simulate various scenarios,
+    including when an INN is found or not found, and when data should be fetched from cache.
+
+    The test also ensures that the expected data is appended to the foreign_companies attribute of
+    the ReferenceInn instance. Mocking is used to patch the cache_add_and_save method to simulate
+    caching behavior without affecting the actual cache.
+
+    :param mocker: Mock fixture for patching methods.
+    :param reference_inn_instance: Instance of ReferenceInn to test.
+    :param list_inn_in_fts: List of dictionaries representing INNs and their associated data.
+    :param num_inn_in_fts: Dictionary containing the number of INNs found in FTS.
+    :param from_cache: Boolean indicating if data should be fetched from cache.
+    :param data: Dictionary containing the original data.
+    :param expected_append_data_calls: List of expected dictionaries to be appended to foreign_companies.
+    """
     # Arrange
     search_engine: SearchEngineParser = SearchEngineParser([], UnifiedCompaniesManager(True))
-    mock_cache_add_and_save.return_value = None
+    mocker.patch('scripts.unified_companies.BaseUnifiedCompanies.cache_add_and_save')
 
     # Act
-    reference_inn_instance.write_existing_inn_from_fts(search_engine, 0, data, list_inn_in_fts, num_inn_in_fts, from_cache)
+    reference_inn_instance.write_existing_inn_from_fts(
+        search_engine, 0, data, list_inn_in_fts, num_inn_in_fts, from_cache
+    )
 
     # Assert
     assert reference_inn_instance.foreign_companies == expected_append_data_calls
