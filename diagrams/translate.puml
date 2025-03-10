@@ -1,0 +1,22 @@
+@startuml
+package "translate_py" {
+    class TranslatorStrategy {
+        <<interface>>
+        +translate(text: str, source_lang: str, target_lang: str) : str
+        +get_response(url: str, headers: dict, data: dict) : dict
+    }
+    class YandexTranslatorAdapter {
+        +URL: str
+        +translate(text: str, source_lang: str, target_lang: str) : str
+    }
+    class GoogleTranslatorAdapter {
+        +translate(text: str, source_lang: str, target_lang: str) : str
+    }
+    class TranslatorFactory {
+        +TRANSLATORS: dict
+        +get_translator(service: str) : TranslatorStrategy
+    }
+    TranslatorStrategy <|-- YandexTranslatorAdapter
+    TranslatorStrategy <|-- GoogleTranslatorAdapter
+}
+@enduml

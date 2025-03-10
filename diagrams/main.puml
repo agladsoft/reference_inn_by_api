@@ -1,0 +1,67 @@
+@startuml
+start
+
+:Подключение к БД;
+if (Успешно?) then (Да)
+    :Получение данных из таблицы fts;
+    :Конвертация файла в словарь;
+    if (Проверка баланса Yandex) then (Достаточно)
+        :Обработка данных с multiprocessing;
+        :Обработка очереди с multiprocessing;
+        :Запись данных в JSON;
+        :Загрузка данных в БД;
+        :Отправка сообщения в Telegram;
+        stop
+    else (Недостаточно)
+        :Отправка уведомления о недостаточном балансе;
+        stop
+    endif
+else (Нет)
+    :Отправка уведомления об ошибке в Telegram;
+    stop
+endif
+
+@enduml
+
+
+@startuml
+package "main_py" {
+    class ReferenceInn {
+        -filename: str
+        -directory: str
+        -russian_companies: list
+        -foreign_companies: list
+        -unknown_companies: list
+        -lock: Lock
+        -telegram: dict
+        +connect_to_db() : Tuple[Client, dict]
+        +push_data_to_db(start_time_script: str) : None
+        +replace_forms_organizations(company_name: str) : str
+        +replace_quotes(sentence: str, quotes: list, replaced_str: str) : str
+        +compare_different_fuzz(company_name: str, translated: str, data: dict) : None
+        +append_data(data: dict) : None
+        +get_data(...) : None
+        +translate_sentence(sentence: str, with_russian: bool) : str
+        +unify_companies(...) : None
+        +parse_all_found_inn(...) : None
+        +write_existing_inn_from_fts(...) : None
+        +join_fts(...) : None
+        +to_csv(...) : None
+        +write_to_csv(index: int, data: dict) : None
+        +count_to_telegram(data: List[dict]) : None
+        +write_to_file(file_path, data) : None
+        +write_to_json() : None
+        +add_index_in_queue(...) : None
+        +add_new_columns(data: dict, start_time_script: str) : None
+        +parse_data(...) : None
+        +create_file_for_cache() : str
+        +convert_file_to_dict() : List[dict]
+        +is_enough_money_to_search_engine() : None
+        +start_multiprocessing_with_queue(...) : None
+        +start_multiprocessing(...) : None
+        +send_message(client: Client) : None
+        +_process_data_with_multiprocessing(...) : None
+        +main() : None
+    }
+}
+@enduml

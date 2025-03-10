@@ -1,0 +1,108 @@
+@startuml
+
+package BaseUnifiedCompanies {
+    class BaseUnifiedCompanies {
+        + is_valid(number: str)
+        + get_company_by_taxpayer_id(taxpayer_id: str)
+        + create_file_for_cache()
+        + load_cache()
+        + get_response(url, country, method="GET", data=None)
+        + cache_add_and_save(taxpayer_id, company_name, country)
+    }
+}
+
+class UnifiedRussianCompanies
+class UnifiedKazakhstanCompanies
+class UnifiedBelarusCompanies
+class UnifiedUzbekistanCompanies
+class SearchEngineParser
+class UnifiedCompaniesManager {
+    + get_valid_company(company_data: str)
+    + query_database(country_obj, taxpayer_id: str)
+    + handle_valid_taxpayer(country_obj, taxpayer_id, index, sentence)
+    + fetch_company_name(countries, taxpayer_id, index, sentence)
+}
+class retry_on_failure {
+    + retry_on_failure(attempts=3, delay=20)
+}
+
+' Наследование
+UnifiedRussianCompanies --|> BaseUnifiedCompanies
+UnifiedKazakhstanCompanies --|> BaseUnifiedCompanies
+UnifiedBelarusCompanies --|> BaseUnifiedCompanies
+UnifiedUzbekistanCompanies --|> BaseUnifiedCompanies
+SearchEngineParser --|> BaseUnifiedCompanies
+
+' Методы UnifiedCompaniesManager
+UnifiedCompaniesManager --> get_valid_company
+UnifiedCompaniesManager --> query_database
+UnifiedCompaniesManager --> handle_valid_taxpayer
+UnifiedCompaniesManager --> fetch_company_name
+
+' Декораторы
+retry_on_failure ..|> UnifiedRussianCompanies : <<декоратор>> get_company_by_taxpayer_id
+retry_on_failure ..|> UnifiedKazakhstanCompanies : <<декоратор>> get_company_by_taxpayer_id
+retry_on_failure ..|> UnifiedBelarusCompanies : <<декоратор>> get_company_by_taxpayer_id
+retry_on_failure ..|> UnifiedUzbekistanCompanies : <<декоратор>> get_company_by_taxpayer_id
+retry_on_failure ..|> SearchEngineParser : <<декоратор>> get_inn_from_search_engine
+
+@enduml
+
+
+@startuml
+package "unified_companies_py" {
+    class BaseUnifiedCompanies {
+        <<abstract>>
+        -table_name: str
+        -conn: sqlite3.Connection
+        -cur: sqlite3.Cursor
+        +is_valid(number: str) : bool
+        +get_company_by_taxpayer_id(taxpayer_id: str) : str
+        +create_file_for_cache() : str
+        +load_cache() : sqlite3.Cursor
+        +get_response(url, country, method, data) : Response
+        +cache_add_and_save(taxpayer_id: str, company_name: str, country: str) : None
+    }
+    class UnifiedCompaniesManager {
+        -unified_companies: list
+        +get_valid_company(company_data: str) : Generator
+        +query_database(country_obj, taxpayer_id: str) : tuple
+        +handle_valid_taxpayer(...) : tuple
+        +fetch_company_name(...) : Generator
+    }
+    class UnifiedRussianCompanies {
+        +is_valid(taxpayer_id: str) : bool
+        +get_company_by_taxpayer_id(taxpayer_id: str) : str
+        +calc_company_check_digit(taxpayer_id: str) : str
+        +calc_personal_check_digits(taxpayer_id: str) : str
+        +validate(taxpayer_id: str) : str
+    }
+    class UnifiedKazakhstanCompanies {
+        +is_valid(taxpayer_id: str) : bool
+        +get_company_by_taxpayer_id(taxpayer_id: str) : str
+        +multiply(weights: list, number: str) : int
+    }
+    class UnifiedBelarusCompanies {
+        +is_valid(taxpayer_id: str) : bool
+        +get_company_by_taxpayer_id(taxpayer_id: str) : str
+    }
+    class UnifiedUzbekistanCompanies {
+        +is_valid(taxpayer_id: str) : bool
+        +get_company_by_taxpayer_id(taxpayer_id: str) : str
+    }
+    class SearchEngineParser {
+        -country: list
+        -manager: callable
+        +get_inn_from_site(...) : None
+        +get_code_error(...) : None
+        +parse_xml(...) : None
+        +get_inn_from_search_engine(value: str) : dict
+        +get_taxpayer_id(value: str) : Tuple[dict, str, bool]
+    }
+    BaseUnifiedCompanies <|-- UnifiedRussianCompanies
+    BaseUnifiedCompanies <|-- UnifiedKazakhstanCompanies
+    BaseUnifiedCompanies <|-- UnifiedBelarusCompanies
+    BaseUnifiedCompanies <|-- UnifiedUzbekistanCompanies
+    BaseUnifiedCompanies <|-- SearchEngineParser
+}
+@enduml
