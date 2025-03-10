@@ -226,6 +226,7 @@ class BaseUnifiedCompanies(abc.ABC):
         """
         proxy: str = next(CYCLED_PROXIES)
         used_proxy: Optional[str] = None
+        response: Optional[requests.Response] = None
         try:
             session: Session = requests.Session()
             session.proxies = {"http": proxy}
@@ -235,10 +236,15 @@ class BaseUnifiedCompanies(abc.ABC):
                 response = session.get(url, timeout=120)
             logger.info(f"Статус запроса {response.status_code}. URL - {url}. Country - {country}")
             used_proxy = session.proxies.get('http')  # или 'https', в зависимости от протокола
-            logger.info(f'Использованный прокси: {used_proxy}')
+            logger.info(f"Использованный прокси: {used_proxy}")
             response.raise_for_status()
             return response
         except requests.exceptions.RequestException as e:
+            if response.status_code == 400 and response.headers.get("Content-Type") == "application/json":
+                with contextlib.suppress(ValueError):
+                    error_data = response.json()
+                    if error_data.get("message") == "Нет данных по запросу":
+                        return None
             logger.error(f"An error occurred during the API request - {e}. Proxy - {used_proxy}")
             raise e
 
@@ -604,7 +610,7 @@ class UnifiedUzbekistanCompanies(BaseUnifiedCompanies):
             soup: BeautifulSoup = BeautifulSoup(response.text, "html.parser")
             a: PageElement = soup.find_all('div', class_='card-body pt-0')[-1]
             if name := a.find_next('h6', class_='card-title'):
-                company_name: str = name.text.replace('\n', '').strip()
+                company_name: Optional[str] = None if name.text in (None, "None") else name.text.replace('\n', '').strip()
             else:
                 company_name = name
             logger.info(f"Company name: {company_name}. INN: {taxpayer_id}")

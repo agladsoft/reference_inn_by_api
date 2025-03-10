@@ -438,7 +438,8 @@ def test_russian_companies_validate_invalid(
     "taxpayer_id, expected_company",
     [
         ("9729133245", 'ООО "КПДТ"'),
-        ("6319160313", 'ООО "СТРОЙСТАНДАРТ"')
+        ("6319160313", 'ООО "СТРОЙСТАНДАРТ"'),
+        ("1234567890", None)
     ],
 )
 def test_russian_companies_get_company_by_taxpayer_id(
@@ -477,7 +478,8 @@ def test_russian_companies_get_company_by_taxpayer_id(
     "taxpayer_id, expected_company",
     [
         ("921140000433", 'ТОО "Кублей"'),
-        ("061040008424", 'ТОО "Альянс-Брок"')
+        ("061040008424", 'ТОО "Альянс-Брок"'),
+        ("123456789012", None)
     ],
 )
 def test_kazakhstan_companies_get_company_by_taxpayer_id(
@@ -513,7 +515,8 @@ def test_kazakhstan_companies_get_company_by_taxpayer_id(
     "taxpayer_id, expected_company",
     [
         ("790973974", 'ООО "Югум-Древ"'),
-        ("800019585", 'СООО "ЗОВ-ЛенЕВРОМЕБЕЛЬ"')
+        ("800019585", 'СООО "ЗОВ-ЛенЕВРОМЕБЕЛЬ"'),
+        ("123456789", None)
     ],
 )
 def test_belarus_companies_get_company_by_taxpayer_id(
@@ -552,7 +555,8 @@ def test_belarus_companies_get_company_by_taxpayer_id(
     "taxpayer_id, expected_company",
     [
         ("305900252", '"AUTOMOTIVE AND MACHINERY SOLUTIONS" mas`uliyati cheklangan jamiyati'),
-        ("309053845", '"TOSHKENT TRAKTOR ZAVODI" mas`uliyati cheklangan jamiyati')
+        ("309053845", '"TOSHKENT TRAKTOR ZAVODI" mas`uliyati cheklangan jamiyati'),
+        ("123567890", None)
     ],
 )
 def test_uzbekistan_companies_get_company_by_taxpayer_id(
