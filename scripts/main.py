@@ -744,6 +744,42 @@ class ReferenceInn(object):
             logger.error(f"An error occurred while receiving data from xmlriver. Exception: {e}")
             raise SystemExit("ошибка_при_получении_баланса_яндекса") from e
 
+    def start_multiprocessing(
+        self,
+        retry_queue: Queue,
+        not_parsed_data: List[dict],
+        fts_results: dict,
+        start_time: str,
+        with_russian: bool = True
+    ) -> None:
+        """
+        Initiates multiprocessing for parsing data.
+
+        This method uses a ThreadPoolExecutor to concurrently parse each dictionary
+        in the provided list of not_parsed_data. It submits the parse_data method
+        for execution, passing the necessary parameters for each entry in the list.
+
+        :param retry_queue: A Queue object used to track indices that need to be retried.
+        :param not_parsed_data: A list of dictionaries representing the data to be parsed.
+        :param fts_results: A dictionary containing FTS data.
+        :param start_time: A string representing the start time of the script.
+        :param with_russian: A boolean indicating whether Russian companies should be
+            unified (True) or not (False).
+        :return: None
+        """
+        with ThreadPoolExecutor(max_workers=COUNT_THREADS) as executor:
+            for index, dict_data in enumerate(not_parsed_data, 2):
+                executor.submit(
+                    self.parse_data,
+                    not_parsed_data,
+                    index,
+                    dict_data,
+                    fts_results,
+                    start_time,
+                    retry_queue,
+                    with_russian=with_russian
+                )
+
     def start_multiprocessing_with_queue(
         self,
         retry_queue: Queue,
@@ -789,42 +825,6 @@ class ReferenceInn(object):
                         is_queue=True,
                         with_russian=with_russian
                     )
-
-    def start_multiprocessing(
-        self,
-        retry_queue: Queue,
-        not_parsed_data: List[dict],
-        fts_results: dict,
-        start_time: str,
-        with_russian: bool = True
-    ) -> None:
-        """
-        Initiates multiprocessing for parsing data.
-
-        This method uses a ThreadPoolExecutor to concurrently parse each dictionary
-        in the provided list of not_parsed_data. It submits the parse_data method
-        for execution, passing the necessary parameters for each entry in the list.
-
-        :param retry_queue: A Queue object used to track indices that need to be retried.
-        :param not_parsed_data: A list of dictionaries representing the data to be parsed.
-        :param fts_results: A dictionary containing FTS data.
-        :param start_time: A string representing the start time of the script.
-        :param with_russian: A boolean indicating whether Russian companies should be
-            unified (True) or not (False).
-        :return: None
-        """
-        with ThreadPoolExecutor(max_workers=COUNT_THREADS) as executor:
-            for index, dict_data in enumerate(not_parsed_data, 2):
-                executor.submit(
-                    self.parse_data,
-                    not_parsed_data,
-                    index,
-                    dict_data,
-                    fts_results,
-                    start_time,
-                    retry_queue,
-                    with_russian=with_russian
-                )
 
     def send_message(self, client: Client) -> None:
         """
