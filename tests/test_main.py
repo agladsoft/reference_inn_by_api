@@ -1,13 +1,16 @@
 import os
 
-os.environ["XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS"] = "."
+os.environ["XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS"] = os.path.dirname(os.path.dirname( __file__ ))
 
 import csv
+import json
 import pytest
 import requests
 import numpy as np
 import pandas as pd
 from typing import List
+from queue import Queue
+from logging import ERROR
 from pathlib import PosixPath
 from unittest.mock import Mock
 from scripts.main import ReferenceInn
@@ -707,3 +710,160 @@ def test_write_existing_inn_from_fts(
 
     # Assert
     assert reference_inn_instance.foreign_companies == expected_append_data_calls
+
+
+@pytest.mark.parametrize("not_parsed_data, sentence, index, ex_full, is_queue, expected_logs, expected_queue_size",
+    [
+        (
+            [{"data": "test", "original_file_parsed_on": "2025-03-10"}], "test sentence", 1, None, False,
+            ["An error occurred in which the processor was added to the queue. Index: 1. Data: test sentence"], 1
+        ),
+        (
+            [{"data": "test", "original_file_parsed_on": "2025-03-10"}], "test sentence", 2,
+            Exception("test exception"), True, ["Exception: test exception. Data: 2, test sentence"], 0
+        ),
+        (
+            [{"data": "test", "original_file_parsed_on": "2025-03-10"}], "", 1, None, False,
+            ["An error occurred in which the processor was added to the queue. Index: 1. Data: "], 1
+        ),
+        (
+            [{"data": "test", "original_file_parsed_on": "2025-03-10"}], "test sentence", 0, None, False,
+            ["An error occurred in which the processor was added to the queue. Index: 0. Data: test sentence"], 1
+        ),
+        (
+            [{"original_file_parsed_on": "2025-03-10"}], "test sentence", 1, None, False, 
+            ["An error occurred in which the processor was added to the queue. Index: 1. Data: test sentence"], 1
+        ),
+        (
+            [{"original_file_parsed_on": "2025-03-10"}], "test sentence", 2,
+            Exception("test exception"), True, ["Exception: test exception. Data: 2, test sentence"], 0
+        )
+    ]
+)
+def test_add_index_in_queue(
+    reference_inn_instance: ReferenceInn,
+    not_parsed_data: List[dict],
+    sentence: str,
+    index: int,
+    ex_full: Exception,
+    is_queue: bool,
+    expected_logs: List[str],
+    expected_queue_size: int,
+    caplog: LogCaptureFixture,
+) -> None:
+    """
+    Test the add_index_in_queue method of the ReferenceInn class.
+
+    This test verifies that the add_index_in_queue method correctly processes and logs
+    errors when an exception occurs during data processing. It uses parameterized inputs
+    to simulate various scenarios, including when an exception is raised or not, and
+    whether the error occurred in the main thread or in a separate thread.
+
+    The test also ensures that the expected data is added to the retry queue and that
+    the queue size is as expected. Caplog is used to capture the log messages.
+
+    :param reference_inn_instance: Instance of ReferenceInn to test.
+    :param not_parsed_data: List of dictionaries representing the data that was not parsed.
+    :param sentence: String containing the sentence that was being parsed when the error occurred.
+    :param index: Integer containing the index of the sentence that was being parsed when the error occurred.
+    :param ex_full: Exception object containing the error that occurred.
+    :param is_queue: Boolean indicating whether the error occurred in the main thread (False) or in a separate thread (True).
+    :param expected_logs: List of expected log messages.
+    :param expected_queue_size: Integer containing the expected size of the retry queue.
+    :param caplog: LogCaptureFixture fixture for capturing log messages.
+    """
+    retry_queue: Queue = Queue()
+
+    # Act
+    with caplog.at_level(ERROR):
+        reference_inn_instance.add_index_in_queue(not_parsed_data, retry_queue, is_queue, sentence, index, ex_full)
+
+    # Assert
+    for expected_log in expected_logs:
+        assert expected_log in caplog.text
+    assert retry_queue.qsize() == expected_queue_size
+
+
+@pytest.mark.parametrize(
+    "filename, russian_companies, foreign_companies, unknown_companies, expected_filenames",
+    [
+        (
+            "test.xlsx",
+            [{"name": "Russian Company"}],
+            [{"name": "Foreign Company"}],
+            [{"name": "Unknown Company"}],
+            ["test_russia.json", "test_foreign.json", "test_unknown.json"],
+        ),
+        (
+            "empty.xlsx",
+            [],
+            [],
+            [],
+            ["empty_russia.json", "empty_foreign.json", "empty_unknown.json"],
+        ),
+        (
+            "russian.xlsx",
+            [{"name": "Russian Company 1"}, {"name": "Russian Company 2"}],
+            [],
+            [],
+            ["russian_russia.json", "russian_foreign.json", "russian_unknown.json"],
+        ),
+        (
+            "test with spaces.xlsx",
+            [{"name": "Company"}],
+            [],
+            [],
+            ["test with spaces_russia.json", "test with spaces_foreign.json", "test with spaces_unknown.json"],
+        ),
+    ],
+)
+def test_write_to_json(
+    reference_inn_instance: ReferenceInn,
+    filename: str,
+    russian_companies: list,
+    foreign_companies: list,
+    unknown_companies: list,
+    expected_filenames: list,
+    tmp_path: str
+) -> None:
+    """
+    Test the write_to_json method of the ReferenceInn class.
+
+    This test verifies that the write_to_json method correctly writes the Russian,
+    foreign, and unknown companies to separate JSON files. The output files are
+    named based on the original filename, appending '_russia.json', '_foreign.json',
+    and '_unknown.json' for the respective categories.
+
+    It checks that the file is created, that the data is written to the file, and
+    that the data is correctly formatted.
+
+    :param reference_inn_instance: ReferenceInn instance.
+    :param filename: The filename of the Excel file.
+    :param russian_companies: List of dictionaries containing the Russian companies.
+    :param foreign_companies: List of dictionaries containing the foreign companies.
+    :param unknown_companies: List of dictionaries containing the unknown companies.
+    :param expected_filenames: List of strings containing the expected filenames.
+    :param tmp_path: The temporary path to which the files are written.
+    :return: None
+    """
+    # Arrange
+    reference_inn_instance.filename = filename
+    reference_inn_instance.russian_companies = russian_companies
+    reference_inn_instance.foreign_companies = foreign_companies
+    reference_inn_instance.unknown_companies = unknown_companies
+
+    # Act
+    reference_inn_instance.write_to_json()
+
+    # Assert
+    for filename in expected_filenames:
+        filepath: str = os.path.join(tmp_path, "json", filename)
+        assert os.path.exists(filepath)
+
+        with open(filepath, "r") as f:
+            if "_russia" in filename:
+                assert json.load(f) == russian_companies
+            elif "_foreign" in filename:
+                assert json.load(f) == foreign_companies
+            elif "_unknown" in filename:
+                assert json.load(f) == unknown_companies

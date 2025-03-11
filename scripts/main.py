@@ -4,6 +4,7 @@ import datetime
 import numpy as np
 import pandas as pd
 from queue import Queue
+from pathlib import Path
 from csv import DictWriter
 from fuzzywuzzy import fuzz
 from requests import Response
@@ -548,6 +549,9 @@ class ReferenceInn(object):
         :param data: The data to be written to the file, typically a dictionary.
         :return: None
         """
+        fle: Path = Path(file_path)
+        if not os.path.exists(fle.parent):  # Проверяем, существует ли директория
+            os.makedirs(fle.parent)  # Создаем директорию, если не существует
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
             logger.info("Данные успешно записаны в файл", pid=current_thread().ident)
@@ -565,7 +569,7 @@ class ReferenceInn(object):
         :return: None
         """
         self.count_to_telegram(self.russian_companies + self.foreign_companies + self.unknown_companies)
-        basename: str = os.path.basename(self.filename)
+        basename: str = os.path.splitext(os.path.basename(self.filename))[0]
         output_file_path: str = os.path.join(self.directory, f'{basename}_russia.json')
         output_file_path_foreign: str = os.path.join(self.directory, f'{basename}_foreign.json')
         output_file_path_unknown: str = os.path.join(self.directory, f'{basename}_unknown.json')
