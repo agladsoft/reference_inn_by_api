@@ -1,6 +1,6 @@
 import os
 
-os.environ["XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS"] = os.path.dirname(os.path.dirname( __file__ ))
+os.environ["XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS"] = os.path.dirname(os.path.dirname(__file__))
 
 import csv
 import json
