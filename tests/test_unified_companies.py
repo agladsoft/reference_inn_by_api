@@ -1,11 +1,11 @@
 import os
-
-os.environ["XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS"] = os.path.dirname(os.path.dirname(__file__))
-
 import json
 import pytest
 from typing import Type
 from unittest.mock import Mock
+
+os.environ["XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS"] = os.path.dirname(os.path.dirname(__file__))
+
 from scripts.unified_companies import *
 
 class MockResponse(Response):

@@ -1,7 +1,4 @@
 import os
-
-os.environ["XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS"] = os.path.dirname(os.path.dirname(__file__))
-
 import csv
 import json
 import pytest
@@ -13,9 +10,12 @@ from queue import Queue
 from logging import ERROR
 from pathlib import PosixPath
 from unittest.mock import Mock
-from scripts.main import ReferenceInn
 from deep_translator import single_detection
 from _pytest.logging import LogCaptureFixture
+
+os.environ["XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS"] = os.path.dirname(os.path.dirname(__file__))
+
+from scripts.main import ReferenceInn
 from scripts.unified_companies import SearchEngineParser, UnifiedCompaniesManager
 
 
