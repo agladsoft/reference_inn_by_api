@@ -103,7 +103,7 @@ TOKEN_API_YANDEX=your_yandex_translate_token
 USER_XML_RIVER=your_xml_river_user
 KEY_XML_RIVER=your_xml_river_key
 
-# Пути к файлам
+# Пути к файлам (Если запускается не через docker-compose)
 XL_IDP_PATH_REFERENCE_INN_BY_API=/path/to/excel/files
 XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS=/path/to/reference_inn_by_api
 XL_IDP_PATH_DOCKER=/path/in/docker
