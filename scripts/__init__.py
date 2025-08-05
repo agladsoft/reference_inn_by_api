@@ -6,13 +6,7 @@ from itertools import cycle
 from dotenv import load_dotenv
 
 COUNT_THREADS: int = 3
-TOKEN_TELEGRAM: str = "6557326533:AAHy6ls9LhTVTGztix8PUSK7BUSaHVEojXc"
-CHAT_ID: str = "-4051876751"
-USER_XML_RIVER: str = "6390"
-KEY_XML_RIVER: str = "e3b3ac2908b2a9e729f1671218c85e12cfe643b0"
 IP_ADDRESS_DADATA: str = "service_inn"
-
-TOKEN_DADATA = "baf71b4b95c986ce9148c24f5aa251d94cd9d850"
 
 REPLACED_QUOTES: list = ["<", ">", "«", "»", "’", "‘", "“", "”", "`", "'", '"']
 
@@ -80,6 +74,9 @@ def get_my_env_var(var_name: str) -> str:
 
 class MissingEnvironmentVariable(Exception):
     pass
+
+USER_XML_RIVER: str = get_my_env_var('USER_XML_RIVER')
+KEY_XML_RIVER: str = get_my_env_var('KEY_XML_RIVER')
 
 
 def telegram(message):
