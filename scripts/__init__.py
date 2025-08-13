@@ -5,6 +5,8 @@ import requests
 from itertools import cycle
 from dotenv import load_dotenv
 
+# os.environ["XL_IDP_PATH_REFERENCE_INN_BY_API_SCRIPTS"] = os.path.dirname(os.path.abspath(__file__))
+
 COUNT_THREADS: int = 3
 IP_ADDRESS_DADATA: str = "service_inn"
 
@@ -77,6 +79,9 @@ class MissingEnvironmentVariable(Exception):
 
 USER_XML_RIVER: str = get_my_env_var('USER_XML_RIVER')
 KEY_XML_RIVER: str = get_my_env_var('KEY_XML_RIVER')
+
+
+TOKEN_API_YANDEX = get_my_env_var('TOKEN_API_YANDEX')
 
 
 def telegram(message):
